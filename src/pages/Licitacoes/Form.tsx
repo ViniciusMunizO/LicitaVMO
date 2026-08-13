@@ -100,7 +100,7 @@ export default function FormLicitacao() {
   const [isEditing, setIsEditing] = useState(false)
   const [versionNote, setVersionNote] = useState('')
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault()
     const pushAndSave = async () => {
       const { dbGet, dbSet } = await import('../../utils/db')
@@ -128,7 +128,7 @@ export default function FormLicitacao() {
         await auditLog(isEditing ? 'licitacao_update' : 'licitacao_create', { codigo: modelo.codigo, note: versionNote }, userName)
       } catch (err) { /* ignore */ }
     }
-    void pushAndSave()
+    await pushAndSave()
     setVersionNote('')
     nav('/licitacoes')
   }

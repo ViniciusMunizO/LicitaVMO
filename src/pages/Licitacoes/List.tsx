@@ -4,6 +4,7 @@ import { dbGet, migrateFromLocalStorage } from '../../utils/db'
 
 export default function ListLicitacoes() {
   const [list, setList] = useState<any[]>([])
+  const [hasAtaByCodigo, setHasAtaByCodigo] = useState<Record<string, boolean>>({})
   const [listOptions, setListOptions] = useState<any>({ page: 1, pageSize: 10, sortBy: 'codigo', sortDir: 'desc' })
   const [filters, setFilters] = useState<any>({ codigo: '', contratante: '', numeroPregao: '', numeroProcesso: '', tipoObjeto: '', tipoDisputa: '', hasAta: 'any', q: '' })
   const [searchTerm, setSearchTerm] = useState('')
@@ -13,21 +14,28 @@ export default function ListLicitacoes() {
     migrateFromLocalStorage().then(async () => {
       const raw = await dbGet('licitacoes')
       if (!mounted) return
-      setList(raw || [])
+      const items: any[] = raw || []
+      setList(items)
+      const entries = await Promise.all(items.map(async (l) => {
+        const attachments = await dbGet(`attachments_${l.codigo}`)
+        return [String(l.codigo), Array.isArray(attachments) && attachments.length > 0] as const
+      }))
+      if (!mounted) return
+      setHasAtaByCodigo(Object.fromEntries(entries))
     })
     return () => { mounted = false }
   }, [])
 
   // debounce searchTerm -> filters.q
   useEffect(() => {
-    const t = setTimeout(() => setFilters(f => ({ ...f, q: searchTerm })), 300)
+    const t = setTimeout(() => setFilters((f: any) => ({ ...f, q: searchTerm })), 300)
     return () => clearTimeout(t)
   }, [searchTerm])
 
   const clearFilters = () => {
     setFilters({ codigo: '', contratante: '', numeroPregao: '', numeroProcesso: '', tipoObjeto: '', tipoDisputa: '', hasAta: 'any', q: '' })
     setSearchTerm('')
-    setListOptions(o => ({ ...o, page: 1 }))
+    setListOptions((o: any) => ({ ...o, page: 1 }))
   }
 
   const filtered = list.filter(l => {
@@ -44,7 +52,7 @@ export default function ListLicitacoes() {
     if (filters.tipoObjeto && filters.tipoObjeto !== '' && (l.tipoObjeto || '') !== filters.tipoObjeto) return false
     if (filters.tipoDisputa && filters.tipoDisputa !== '' && (l.tipoDisputa || '') !== filters.tipoDisputa) return false
     if (filters.hasAta !== 'any') {
-      const has = ((l.codigo && localStorage.getItem(`attachments_${l.codigo}`)) ? JSON.parse(localStorage.getItem(`attachments_${l.codigo}`) || '[]').length > 0 : false)
+      const has = !!hasAtaByCodigo[String(l.codigo)]
       if (filters.hasAta === 'yes' && !has) return false
       if (filters.hasAta === 'no' && has) return false
     }
@@ -158,9 +166,9 @@ export default function ListLicitacoes() {
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm">Página {listOptions.page} de {Math.max(1, Math.ceil(total / listOptions.pageSize))}</div>
             <div className="flex items-center gap-2">
-              <button disabled={listOptions.page <= 1} onClick={() => setListOptions(o => ({ ...o, page: o.page - 1 }))} className="px-3 py-1 bg-gray-100 rounded">Anterior</button>
-              <button disabled={start + listOptions.pageSize >= total} onClick={() => setListOptions(o => ({ ...o, page: o.page + 1 }))} className="px-3 py-1 bg-gray-100 rounded">Próxima</button>
-              <select value={listOptions.pageSize} onChange={e => setListOptions(o => ({ ...o, pageSize: Number(e.target.value), page: 1 }))} className="border p-1 rounded">
+              <button disabled={listOptions.page <= 1} onClick={() => setListOptions((o: any) => ({ ...o, page: o.page - 1 }))} className="px-3 py-1 bg-gray-100 rounded">Anterior</button>
+              <button disabled={start + listOptions.pageSize >= total} onClick={() => setListOptions((o: any) => ({ ...o, page: o.page + 1 }))} className="px-3 py-1 bg-gray-100 rounded">Próxima</button>
+              <select value={listOptions.pageSize} onChange={e => setListOptions((o: any) => ({ ...o, pageSize: Number(e.target.value), page: 1 }))} className="border p-1 rounded">
                 <option value={5}>5</option>
                 <option value={10}>10</option>
                 <option value={25}>25</option>

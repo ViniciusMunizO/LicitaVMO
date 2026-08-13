@@ -14,20 +14,24 @@ function openDB() {
   })
 }
 
-async function withStore(mode: IDBTransactionMode, cb: (store: IDBObjectStore) => void | Promise<void>) {
+async function withStore(mode: IDBTransactionMode, cb: (store: IDBObjectStore) => void) {
   const db = await openDB()
-  const tx = db.transaction(STORE, mode)
-  const store = tx.objectStore(STORE)
-  await cb(store)
-  return new Promise<void>((resolve, reject) => {
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
+  try {
+    const tx = db.transaction(STORE, mode)
+    const store = tx.objectStore(STORE)
+    cb(store)
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+  } finally {
+    db.close()
+  }
 }
 
 export async function dbSet(key: string, value: any) {
   try {
-    await withStore('readwrite', store => store.put(value, key))
+    await withStore('readwrite', store => { store.put(value, key) })
   } catch (e) {
     // fallback to localStorage
     localStorage.setItem(key, JSON.stringify(value))
@@ -37,12 +41,16 @@ export async function dbSet(key: string, value: any) {
 export async function dbGet(key: string) {
   try {
     const db = await openDB()
-    return await new Promise<any>((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly')
-      const req = tx.objectStore(STORE).get(key)
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+    try {
+      return await new Promise<any>((resolve, reject) => {
+        const tx = db.transaction(STORE, 'readonly')
+        const req = tx.objectStore(STORE).get(key)
+        req.onsuccess = () => resolve(req.result)
+        req.onerror = () => reject(req.error)
+      })
+    } finally {
+      db.close()
+    }
   } catch (e) {
     const raw = localStorage.getItem(key)
     return raw ? JSON.parse(raw) : null
@@ -51,7 +59,7 @@ export async function dbGet(key: string) {
 
 export async function dbDelete(key: string) {
   try {
-    await withStore('readwrite', store => store.delete(key))
+    await withStore('readwrite', store => { store.delete(key) })
   } catch (e) {
     localStorage.removeItem(key)
   }

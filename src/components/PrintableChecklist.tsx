@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
+import { dbGet } from '../utils/db'
 
 type Props = {
   modelo: any
@@ -10,8 +11,18 @@ type Props = {
 }
 
 export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref }: Props) {
-  const attachments = JSON.parse(localStorage.getItem(`attachments_${codigo}`) || '[]') as any[]
-  const items = JSON.parse(localStorage.getItem(`items_${codigo}`) || '[]') as any[]
+  const [attachments, setAttachments] = useState<any[]>([])
+  const [items, setItems] = useState<any[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    Promise.all([dbGet(`attachments_${codigo}`), dbGet(`items_${codigo}`)]).then(([at, it]) => {
+      if (!mounted) return
+      setAttachments(at || [])
+      setItems(it || [])
+    })
+    return () => { mounted = false }
+  }, [codigo])
 
   return (
     <>
