@@ -3,7 +3,9 @@ import { useAuth } from '../../context/AuthContext'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { dbGet } from '../../utils/db'
 import { exportElementsToPdf } from '../../utils/pdf'
+import { formatDateTimeBR } from '../../utils/date'
 import AttachmentsModal from '../../components/AttachmentsModal'
+import DeclaracoesSection from '../../components/DeclaracoesSection'
 
 export default function DetailLicitacao() {
   const { codigo } = useParams()
@@ -13,7 +15,6 @@ export default function DetailLicitacao() {
   const [items, setItems] = useState<any[]>([])
   const printRef = useRef<HTMLDivElement | null>(null)
   const itemsRef = useRef<HTMLDivElement | null>(null)
-  const snapshotContainerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -42,53 +43,7 @@ export default function DetailLicitacao() {
   }, [codigo])
 
   const { user } = useAuth()
-  const [openHistoryIndex, setOpenHistoryIndex] = useState<number | null>(null)
   const [openAttachments, setOpenAttachments] = useState(false)
-
-  const downloadJson = (obj: any, filename = 'export.json') => {
-    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const exportSnapshotPdf = async (snapshot: any, filename = 'snapshot.pdf') => {
-    // create a temporary container
-    const container = document.createElement('div')
-    container.style.position = 'absolute'
-    container.style.left = '-9999px'
-    container.style.top = '0'
-    container.style.width = '800px'
-    container.style.padding = '20px'
-    container.style.background = '#fff'
-    container.id = `snapshot-export-${Date.now()}`
-    container.innerHTML = `<h2>Licitação ${snapshot.codigo || ''} — ${snapshot.ano || ''}</h2>`
-    const c = snapshot.contratante || {}
-    container.innerHTML += `<div><strong>Contratante:</strong> ${c.codigo ? c.codigo + ' — ' : ''}${c.nome || snapshot.contratado || (snapshot.empresa && snapshot.empresa.razaoSocial) || '-'}</div>`
-    if (snapshot.habilitacao) {
-      container.innerHTML += `<h4>Habilitação</h4><ul>`
-      Object.entries(snapshot.habilitacao).forEach(([k, v]) => {
-        container.innerHTML += `<li>${k}: ${String(v)}</li>`
-      })
-      container.innerHTML += `</ul>`
-    }
-    if (snapshot.items && Array.isArray(snapshot.items)) {
-      container.innerHTML += `<h4>Itens</h4><table style="width:100%;border-collapse:collapse"><thead><tr><th>#</th><th>Descrição</th><th>Unidade</th><th>Quantidade</th></tr></thead><tbody>`
-      snapshot.items.forEach((it: any, idx: number) => {
-        container.innerHTML += `<tr><td>${idx + 1}</td><td>${it.descricao || it.description || '-'}</td><td>${it.unidade || '-'}</td><td>${it.quantidade || it.qty || '-'}</td></tr>`
-      })
-      container.innerHTML += `</tbody></table>`
-    }
-    document.body.appendChild(container)
-    try {
-      await exportElementsToPdf([container], filename)
-    } finally {
-      document.body.removeChild(container)
-    }
-  }
 
   if (!model) return (
     <div className="bg-white p-6 rounded shadow max-w-3xl">
@@ -127,13 +82,22 @@ export default function DetailLicitacao() {
           <div className="mt-1">{model.portal || '-'}</div>
         </div>
         <div>
+          <strong>Data de Credenciamento</strong>
+          <div className="mt-1">{formatDateTimeBR(model.dataCredenciamento, model.horaCredenciamento)}</div>
+        </div>
+        <div>
           <strong>Data da Licitação</strong>
-          <div className="mt-1">{model.dataLicitacao || '-'}</div>
+          <div className="mt-1">{formatDateTimeBR(model.dataLicitacao, model.horaLicitacao)}</div>
         </div>
         <div>
           <strong>Tipo Objeto</strong>
           <div className="mt-1">{model.tipoObjeto || '-'}</div>
         </div>
+      </div>
+
+      <div className="mt-4">
+        <strong>Objeto Licitação</strong>
+        <div className="mt-1 whitespace-pre-wrap">{model.objetoLicitacao || '-'}</div>
       </div>
 
       <div className="mt-6">
@@ -172,63 +136,87 @@ export default function DetailLicitacao() {
         {items.length === 0 ? (
           <div className="text-sm text-gray-500 mt-2">Nenhum item importado</div>
         ) : (
-          <table className="w-full table-auto mt-2">
-            <thead>
-              <tr className="text-left text-sm text-gray-500">
-                <th className="p-2">#</th>
-                <th className="p-2">Descrição</th>
-                <th className="p-2">Unidade</th>
-                <th className="p-2">Quantidade</th>
-                <th className="p-2">Vencedor</th>
-                <th className="p-2">Anexos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="p-2">{idx + 1}</td>
-                  <td className="p-2">{it.descricao || it.description || '-'}</td>
-                  <td className="p-2">{it.unidade || '-'}</td>
-                  <td className="p-2">{it.quantidade || it.qty || '-'}</td>
-                  <td className="p-2">
-                    {it.vencedor ? <span className="text-sm font-medium text-green-600">Vencedor</span> : <span className="text-sm text-gray-600">—</span>}
-                    <div className="mt-1">
-                      <button onClick={async () => {
-                        const key = `items_${model.codigo}`
-                        const { dbGet, dbSet } = await import('../../utils/db')
-                        const list = (await dbGet(key)) || []
-                        list[idx] = { ...(list[idx] || {}), vencedor: !list[idx]?.vencedor }
-                        await dbSet(key, list)
-                        setItems(list)
-                        try {
-                          const { auditLog } = await import('../../utils/audit')
-                          const user = localStorage.getItem('user_name') || undefined
-                          await auditLog('item_mark_winner', { codigo: model.codigo, itemIndex: idx, vencedor: list[idx].vencedor, descricao: list[idx].descricao }, user)
-                        } catch (err) { /* ignore */ }
-                      }} className="btn btn-ghost text-xs mt-1">Marcar/Desmarcar vencedor</button>
-                    </div>
-                  </td>
-                  <td className="p-2">
-                    {attachments.filter(a => a.linkedItemIndex !== undefined && a.linkedItemIndex === idx).length} anexos
-                  </td>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full table-auto text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 whitespace-nowrap">
+                  <th className="p-2">Item</th>
+                  <th className="p-2">Descrição</th>
+                  <th className="p-2">Uni</th>
+                  <th className="p-2">Qtd</th>
+                  <th className="p-2">Valor Edital</th>
+                  <th className="p-2">Total</th>
+                  <th className="p-2">Marca</th>
+                  <th className="p-2">Apresentação</th>
+                  <th className="p-2">Nº Anvisa</th>
+                  <th className="p-2">Valor Custo</th>
+                  <th className="p-2">TX</th>
+                  <th className="p-2">Custo + 15% (Uni)</th>
+                  <th className="p-2">Total Custo</th>
+                  <th className="p-2">Status</th>
+                  <th className="p-2">Custo Caixa</th>
+                  <th className="p-2">Vencedor</th>
+                  <th className="p-2">Anexos</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((it, idx) => (
+                  <tr key={idx} className="border-t whitespace-nowrap">
+                    <td className="p-2">{it.item ?? idx + 1}</td>
+                    <td className="p-2 whitespace-normal">{it.descricao || it.description || '-'}</td>
+                    <td className="p-2">{it.unidade || '-'}</td>
+                    <td className="p-2">{it.quantidade ?? it.qty ?? '-'}</td>
+                    <td className="p-2">{it.valorEdital ?? '-'}</td>
+                    <td className="p-2">{it.totalEdital ?? '-'}</td>
+                    <td className="p-2">{it.marca || '-'}</td>
+                    <td className="p-2">{it.apresentacao || '-'}</td>
+                    <td className="p-2">{it.anvisa || '-'}</td>
+                    <td className="p-2">{it.valorCusto ?? '-'}</td>
+                    <td className="p-2">{it.tx ?? '-'}</td>
+                    <td className="p-2">{it.custoUnitario ?? '-'}</td>
+                    <td className="p-2">{it.totalCusto ?? '-'}</td>
+                    <td className="p-2">{it.status || '-'}</td>
+                    <td className="p-2">{it.custoCaixa ?? '-'}</td>
+                    <td className="p-2">
+                      {it.vencedor ? <span className="text-sm font-medium text-green-600">Vencedor</span> : <span className="text-sm text-gray-600">—</span>}
+                      <div className="mt-1">
+                        <button onClick={async () => {
+                          const key = `items_${model.codigo}`
+                          const { dbGet, dbSet } = await import('../../utils/db')
+                          const list = (await dbGet(key)) || []
+                          list[idx] = { ...(list[idx] || {}), vencedor: !list[idx]?.vencedor }
+                          await dbSet(key, list)
+                          setItems(list)
+                          try {
+                            const { auditLog } = await import('../../utils/audit')
+                            const user = localStorage.getItem('user_name') || undefined
+                            await auditLog('item_mark_winner', { codigo: model.codigo, itemIndex: idx, vencedor: list[idx].vencedor, descricao: list[idx].descricao }, user)
+                          } catch (err) { /* ignore */ }
+                        }} className="btn btn-ghost text-xs mt-1">Marcar/Desmarcar</button>
+                      </div>
+                    </td>
+                    <td className="p-2">
+                      {attachments.filter(a => a.linkedItemIndex !== undefined && a.linkedItemIndex === idx).length} anexos
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      <DeclaracoesSection modelo={model} />
 
       <div className="mt-6 flex gap-2">
         <button onClick={async () => {
           if (!printRef.current) return
-          await exportElementsToPdf([printRef.current], `checklist_${model.codigo}.pdf`)
+          await exportElementsToPdf([printRef.current], `checklist_${model.codigo}.pdf`, 'Checklist')
         }} className="btn btn-primary">Exportar Checklist (PDF)</button>
         <button onClick={async () => {
           if (!itemsRef.current) return
-          await exportElementsToPdf([itemsRef.current], `itens_${model.codigo}.pdf`)
+          await exportElementsToPdf([itemsRef.current], `itens_${model.codigo}.pdf`, 'Itens')
         }} className="btn btn-primary">Exportar Itens (PDF)</button>
-        <button onClick={() => downloadJson(model, `licitacao_${model.codigo}.json`)} className="btn btn-ghost">Exportar JSON</button>
-        <button onClick={async () => await exportSnapshotPdf(model, `licitacao_${model.codigo}_snapshot.pdf`)} className="btn btn-ghost">Exportar PDF (JSON snapshot)</button>
       </div>
 
       {/* hidden printable DOM */}
@@ -274,32 +262,6 @@ export default function DetailLicitacao() {
           </table>
         </div>
       </div>
-      <div className="mt-6">
-        <h4 className="font-semibold">Histórico de versões</h4>
-        {(!model?.history || model.history.length === 0) ? (
-          <div className="text-sm text-gray-500 mt-2">Sem versões anteriores</div>
-        ) : (
-          <div className="mt-2 space-y-2">
-            {model.history.map((h: any, idx: number) => (
-              <div key={idx} className="p-3 border rounded bg-gray-50">
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-700">Versão #{idx + 1} — {new Date(h.at).toLocaleString()} — por {h.by || 'unknown'}</div>
-                  <div className="flex gap-2">
-                      <button onClick={() => setOpenHistoryIndex(openHistoryIndex === idx ? null : idx)} className="text-sm link-primary">Visualizar</button>
-                      <button onClick={() => downloadJson(h.snapshot, `licitacao_${model.codigo}_v${idx+1}.json`)} className="text-sm bg-gray-100 px-2 py-1 rounded">Baixar JSON</button>
-                      <button onClick={async () => await exportSnapshotPdf(h.snapshot, `licitacao_${model.codigo}_v${idx+1}.pdf`)} className="text-sm bg-gray-100 px-2 py-1 rounded">Exportar PDF</button>
-                    </div>
-                </div>
-                {openHistoryIndex === idx && (
-                  <pre className="mt-2 text-xs bg-white p-2 border rounded max-h-48 overflow-auto">{JSON.stringify(h.snapshot, null, 2)}</pre>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* (Revert removed) */}
 
       <AttachmentsModal open={openAttachments} onClose={async () => {
         setOpenAttachments(false)

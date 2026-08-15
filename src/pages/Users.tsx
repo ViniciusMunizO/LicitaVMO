@@ -1,55 +1,95 @@
 import React, { useState, useEffect } from 'react'
+import { getUsers, saveUsers, StoredUser } from '../utils/auth'
 
-type User = { id: number; name: string; role: 'admin' | 'user' }
+const ROLE_LABELS: Record<StoredUser['role'], string> = {
+  admin: 'Administrador',
+  moderador: 'Moderador',
+  user: 'Usuário',
+}
 
 export default function Users() {
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<StoredUser[]>([])
   const [name, setName] = useState('')
-  const [role, setRole] = useState<'admin' | 'user'>('user')
+  const [loginValue, setLoginValue] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<StoredUser['role']>('user')
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const raw = localStorage.getItem('users')
-    setUsers(raw ? JSON.parse(raw) : [])
+    let mounted = true
+    getUsers().then(u => { if (mounted) setUsers(u) })
+    return () => { mounted = false }
   }, [])
 
-  function nextId() {
-    const raw = localStorage.getItem('users_next')
-    const n = raw ? Number(raw) : 1
-    localStorage.setItem('users_next', String(n + 1))
-    return n
-  }
-
-  const add = (e: React.FormEvent) => {
+  const add = async (e: React.FormEvent) => {
     e.preventDefault()
-    const u: User = { id: nextId(), name, role }
-    const updated = [...users, u]
-    localStorage.setItem('users', JSON.stringify(updated))
+    setError('')
+    const loginTrimmed = loginValue.trim()
+    if (users.some(u => u.login.toLowerCase() === loginTrimmed.toLowerCase())) {
+      setError('Já existe um usuário com esse login.')
+      return
+    }
+    const nextId = users.reduce((max, u) => Math.max(max, u.id), 0) + 1
+    const novo: StoredUser = { id: nextId, name: name.trim(), login: loginTrimmed, password, role }
+    const updated = [...users, novo]
+    await saveUsers(updated)
     setUsers(updated)
     setName('')
+    setLoginValue('')
+    setPassword('')
+    setRole('user')
   }
 
   return (
     <div>
       <h3 className="text-xl font-semibold mb-4">Gerenciar Usuários</h3>
       <div className="bg-white p-4 rounded shadow mb-4">
-        <form onSubmit={add} className="flex gap-2 items-center">
-          <input placeholder="Nome" value={name} onChange={e => setName(e.target.value)} className="p-2 rounded" required />
-          <select value={role} onChange={e => setRole(e.target.value as any)} className="p-2 rounded">
-            <option value="user">Usuário</option>
-            <option value="admin">Administrador</option>
-          </select>
-          <button className="btn btn-primary">Criar</button>
+        <form onSubmit={add} className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-600">Nome</label>
+            <input value={name} onChange={e => setName(e.target.value)} className="w-full p-2 rounded" required />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600">Login</label>
+            <input value={loginValue} onChange={e => setLoginValue(e.target.value)} className="w-full p-2 rounded" required />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600">Senha</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-2 rounded" required />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600">Perfil</label>
+            <select value={role} onChange={e => setRole(e.target.value as any)} className="w-full p-2 rounded">
+              <option value="user">Usuário</option>
+              <option value="moderador">Moderador</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div className="col-span-2 flex items-center gap-3">
+            <button className="btn btn-primary" type="submit">Criar</button>
+            {error && <span className="text-sm text-red-600">{error}</span>}
+          </div>
         </form>
       </div>
 
       <div className="bg-white p-4 rounded shadow">
         <table className="w-full">
           <thead>
-            <tr className="text-left text-sm text-gray-500"><th>ID</th><th>Nome</th><th>Role</th></tr>
+            <tr className="text-left text-sm text-gray-500">
+              <th className="p-2">ID</th>
+              <th className="p-2">Nome</th>
+              <th className="p-2">Login</th>
+              <th className="p-2">Perfil</th>
+            </tr>
           </thead>
           <tbody>
             {users.map(u => (
-              <tr key={u.id} className="border-t"><td className="p-2">{u.id}</td><td className="p-2">{u.name}</td><td className="p-2">{u.role}</td></tr>
+              <tr key={u.id} className="border-t">
+                <td className="p-2">{u.id}</td>
+                <td className="p-2">{u.name}</td>
+                <td className="p-2">{u.login}</td>
+                <td className="p-2">{ROLE_LABELS[u.role]}</td>
+              </tr>
             ))}
           </tbody>
         </table>

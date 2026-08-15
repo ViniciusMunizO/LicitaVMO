@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate, useLocation } from 'react-router-dom'
-import CompanyModal from '../../components/CompanyModal'
 import ContractorModal from '../../components/ContractorModal'
 import AttachmentsModal from '../../components/AttachmentsModal'
 import ItemsImportModal from '../../components/ItemsImportModal'
 import PrintableChecklist from '../../components/PrintableChecklist'
 import { exportElementsToPdf } from '../../utils/pdf'
+import { nowInBrasilia } from '../../utils/date'
+import { DateInputBR, TimeInputBR } from '../../components/DateTimeBR'
 
 type Licitacao = {
   codigo: number
@@ -15,15 +16,17 @@ type Licitacao = {
   numeroPregao?: string
   numeroProcesso?: string
   portal?: string
-  dataLicitacao?: string
   tipoObjeto?: string
+  objetoLicitacao?: string
+  dataCredenciamento?: string
+  horaCredenciamento?: string
+  dataLicitacao?: string
+  horaLicitacao?: string
   tipoDisputa?: string
   definJulgamento?: string
   prazoGarantia?: string
   vigenciaContrato?: string
-  empresa?: any
   habilitacao?: any
-  history?: any[]
   [key: string]: any
 }
 
@@ -39,8 +42,6 @@ export default function FormLicitacao() {
   const nav = useNavigate()
   const location = useLocation()
   const [modelo, setModelo] = useState<Licitacao>({ codigo: 0, ano: new Date().getFullYear() })
-  const [showCompanyModal, setShowCompanyModal] = useState(false)
-  const [selectedCompany, setSelectedCompany] = useState<any>(null)
   const [selectedContratante, setSelectedContratante] = useState<any>(null)
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false)
   const [showItemsImportModal, setShowItemsImportModal] = useState(false)
@@ -85,51 +86,42 @@ export default function FormLicitacao() {
         const found = list.find((x: any) => String(x.codigo) === String(edit))
         if (found) {
           setModelo(found)
-          setSelectedCompany(found.empresa || null)
           setHabilitacao(found.habilitacao || ({} as any))
           setIsEditing(true)
           return
         }
       }
-      setModelo(m => ({ ...m, codigo: nextCodigo() }))
+      const { date, time } = nowInBrasilia()
+      setModelo(m => ({ ...m, codigo: nextCodigo(), dataCredenciamento: date, horaCredenciamento: time }))
     }
     init()
     return () => { mounted = false }
   }, [])
 
   const [isEditing, setIsEditing] = useState(false)
-  const [versionNote, setVersionNote] = useState('')
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
     const pushAndSave = async () => {
       const { dbGet, dbSet } = await import('../../utils/db')
       const list = (await dbGet('licitacoes')) || []
+      const record = { ...modelo, criadoPor: user?.name, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao }
       if (isEditing) {
         const idx = list.findIndex((x: any) => String(x.codigo) === String(modelo.codigo))
-        if (idx >= 0) {
-          // push previous snapshot into history (include optional version note)
-          const prev = list[idx]
-          const prevHistory = Array.isArray(prev.history) ? prev.history : []
-          prevHistory.push({ snapshot: { ...prev }, at: Date.now(), by: user?.name, note: versionNote || undefined })
-          // update with new data and keep history
-          list[idx] = { ...modelo, criadoPor: user?.name, empresa: selectedCompany, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao, history: prevHistory, lastNote: versionNote || undefined }
-        } else {
-          list.push({ ...modelo, criadoPor: user?.name, empresa: selectedCompany, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao, createdNote: versionNote || undefined })
-        }
+        if (idx >= 0) list[idx] = record
+        else list.push(record)
       } else {
-        list.push({ ...modelo, criadoPor: user?.name, empresa: selectedCompany, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao, createdNote: versionNote || undefined })
+        list.push(record)
       }
       await dbSet('licitacoes', list)
       // audit
       try {
         const { auditLog } = await import('../../utils/audit')
         const userName = localStorage.getItem('user_name') || undefined
-        await auditLog(isEditing ? 'licitacao_update' : 'licitacao_create', { codigo: modelo.codigo, note: versionNote }, userName)
+        await auditLog(isEditing ? 'licitacao_update' : 'licitacao_create', { codigo: modelo.codigo }, userName)
       } catch (err) { /* ignore */ }
     }
     await pushAndSave()
-    setVersionNote('')
     nav('/licitacoes')
   }
 
@@ -194,25 +186,6 @@ export default function FormLicitacao() {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-gray-600">Empresa Licitante</label>
-          <div className="flex gap-2 items-center">
-            <div className="flex-1">
-              {selectedCompany ? (
-                <div className="p-2 border rounded bg-gray-100">
-                  <div className="text-sm font-medium">{selectedCompany.codigo} — {selectedCompany.razaoSocial}</div>
-                  <div className="text-xs text-gray-500">{selectedCompany.representante}</div>
-                </div>
-              ) : (
-                <div className="p-2 border rounded bg-gray-100 text-sm text-gray-500">Nenhuma empresa selecionada</div>
-              )}
-            </div>
-            <div>
-              <button type="button" onClick={() => setShowCompanyModal(true)} className="bg-blue-600 text-white px-3 py-1 rounded">Selecionar/Cadastrar</button>
-            </div>
-          </div>
-        </div>
-
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-600">Número do Pregão</label>
@@ -224,14 +197,10 @@ export default function FormLicitacao() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-600">Portal Eletrônico</label>
             <input value={(modelo as any).portal || ''} onChange={e => setModelo({ ...modelo, portal: e.target.value })} className="w-full p-2 rounded" />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600">Data da Licitação</label>
-            <input type="datetime-local" value={(modelo as any).dataLicitacao || ''} onChange={e => setModelo({ ...modelo, dataLicitacao: e.target.value })} className="w-full p-2 rounded" />
           </div>
           <div>
             <label className="block text-sm text-gray-600">Tipo Objeto</label>
@@ -241,6 +210,33 @@ export default function FormLicitacao() {
               <option>Materiais</option>
               <option>Misto</option>
             </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm text-gray-600">Objeto Licitação</label>
+          <textarea value={(modelo as any).objetoLicitacao || ''} onChange={e => setModelo({ ...modelo, objetoLicitacao: e.target.value })} className="w-full p-2 rounded" rows={3} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600">Data de Credenciamento</label>
+            <DateInputBR value={(modelo as any).dataCredenciamento || ''} readOnly className="w-full p-2 rounded readonly-field" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600">Horário de Credenciamento</label>
+            <TimeInputBR value={(modelo as any).horaCredenciamento || ''} readOnly className="w-full p-2 rounded readonly-field" />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600">Data da Licitação</label>
+            <DateInputBR value={(modelo as any).dataLicitacao || ''} onChange={v => setModelo({ ...modelo, dataLicitacao: v })} className="w-full p-2 rounded" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600">Horário da Licitação</label>
+            <TimeInputBR value={(modelo as any).horaLicitacao || ''} onChange={v => setModelo({ ...modelo, horaLicitacao: v })} className="w-full p-2 rounded" />
           </div>
         </div>
 
@@ -308,27 +304,25 @@ export default function FormLicitacao() {
             const required = [
               ['Número do Pregão', modelo['numeroPregao']],
               ['Número do Processo', modelo['numeroProcesso']],
-              ['Contratante', modelo['contratado'] || selectedCompany?.razaoSocial],
+              ['Contratante', modelo['contratado']],
               ['Portal', modelo['portal']],
               ['Data da licitação', modelo['dataLicitacao']],
               ['Tipo Objeto', modelo['tipoObjeto']],
               ['Tipo de disputa', modelo['tipoDisputa']],
-              ['Definição do Julgamento', modelo['definJulgamento']],
-              ['Licitante', selectedCompany?.razaoSocial]
+              ['Definição do Julgamento', modelo['definJulgamento']]
             ]
-            const missing = required.filter(([, v]) => !v).map(([k]) => k)
+            const missing = required.filter(([, v]) => !v).map(([k]) => k as string)
             setWarnings(missing)
 
             if (!page1Ref.current || !page2Ref.current) return
-            await exportElementsToPdf([page1Ref.current, page2Ref.current], `checklist_${modelo.codigo}.pdf`)
+            await exportElementsToPdf([page1Ref.current, page2Ref.current], `checklist_${modelo.codigo}.pdf`, 'Checklist')
           }} className="bg-indigo-600 text-white px-4 py-2 rounded">Exportar PDF</button>
           <button type="button" onClick={async () => {
             if (!page2Ref.current) return
-            await exportElementsToPdf([page2Ref.current], `itens_${modelo.codigo}.pdf`)
+            await exportElementsToPdf([page2Ref.current], `itens_${modelo.codigo}.pdf`, 'Itens')
           }} className="btn btn-primary">Exportar Itens (PDF)</button>
         </div>
       </form>
-      <CompanyModal open={showCompanyModal} onClose={() => setShowCompanyModal(false)} onSelect={(e) => setSelectedCompany(e)} />
       <AttachmentsModal open={showAttachmentsModal} onClose={() => setShowAttachmentsModal(false)} codigo={modelo.codigo} />
       <ItemsImportModal open={showItemsImportModal} onClose={() => setShowItemsImportModal(false)} codigo={modelo.codigo} />
       <ContractorModal open={showContractorModal} onClose={async () => {

@@ -10,7 +10,7 @@ function hexToRgb(hex: string) {
   return { r, g, b }
 }
 
-export async function exportElementsToPdf(elements: HTMLElement[], filename = 'checklist.pdf') {
+export async function exportElementsToPdf(elements: HTMLElement[], filename = 'documento.pdf', title = 'Documento') {
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' })
   const pdfWidth = pdf.internal.pageSize.getWidth()
   const pdfPageHeight = pdf.internal.pageSize.getHeight()
@@ -47,7 +47,7 @@ export async function exportElementsToPdf(elements: HTMLElement[], filename = 'c
     pdf.text('LicitaVMO', 12, 28)
     pdf.setFontSize(10)
     pdf.setTextColor(240, 240, 240)
-    pdf.text(`Checklist — página ${pageIndex}`, pdfWidth - 140, 28)
+    pdf.text(`${title} — página ${pageIndex}`, pdfWidth - 12, 28, { align: 'right' })
 
     // add the content image below header
     const y = headerHeight + 8

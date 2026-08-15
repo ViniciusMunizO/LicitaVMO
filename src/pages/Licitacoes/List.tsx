@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { dbGet, migrateFromLocalStorage } from '../../utils/db'
+import { formatDateTimeBR } from '../../utils/date'
 
 export default function ListLicitacoes() {
   const [list, setList] = useState<any[]>([])
@@ -153,7 +154,7 @@ export default function ListLicitacoes() {
                   <td className="p-2">{l.codigo}</td>
                   <td className="p-2">{l.ano}</td>
                   <td className="p-2">{(l.contratante?.codigo ? `${l.contratante.codigo} — ` : '') + (l.contratante?.nome || l.contratado || l.empresa?.razaoSocial || '')}</td>
-                  <td className="p-2">{l.dataLicitacao || '-'}</td>
+                  <td className="p-2">{formatDateTimeBR(l.dataLicitacao, l.horaLicitacao)}</td>
                   <td className="p-2">{l.situacao || '-'}</td>
                   <td className="p-2">
                       <Link to={`/licitacoes/${l.codigo}`} className="text-sm link-primary">Ver</Link>

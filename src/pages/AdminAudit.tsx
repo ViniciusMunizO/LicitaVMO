@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { dbGet } from '../utils/db'
+import { formatEpochBR } from '../utils/date'
 
 export default function AdminAudit() {
   const [logs, setLogs] = useState<any[]>([])
@@ -24,7 +25,7 @@ export default function AdminAudit() {
         {logs.length === 0 && <div className="text-sm text-gray-500">Nenhum log de auditoria.</div>}
         {logs.map((l: any) => (
           <div key={l.id} className="p-2 border-b">
-            <div className="text-sm text-gray-700">{new Date(l.at).toLocaleString()} — <strong>{l.action}</strong> — {l.user || 'unknown'}</div>
+            <div className="text-sm text-gray-700">{formatEpochBR(l.at)} — <strong>{l.action}</strong> — {l.user || 'unknown'}</div>
             <pre className="text-xs mt-1 bg-gray-50 p-2 rounded">{JSON.stringify(l.payload, null, 2)}</pre>
           </div>
         ))}

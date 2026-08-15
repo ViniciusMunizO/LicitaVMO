@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { dbGet } from '../utils/db'
+import { formatDateTimeBR } from '../utils/date'
 
 type Props = {
   modelo: any
@@ -13,13 +14,15 @@ type Props = {
 export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref }: Props) {
   const [attachments, setAttachments] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
+  const [empresa, setEmpresa] = useState<any>(null)
 
   useEffect(() => {
     let mounted = true
-    Promise.all([dbGet(`attachments_${codigo}`), dbGet(`items_${codigo}`)]).then(([at, it]) => {
+    Promise.all([dbGet(`attachments_${codigo}`), dbGet(`items_${codigo}`), dbGet('empresa_info')]).then(([at, it, emp]) => {
       if (!mounted) return
       setAttachments(at || [])
       setItems(it || [])
+      setEmpresa(emp || null)
     })
     return () => { mounted = false }
   }, [codigo])
@@ -32,17 +35,31 @@ export default function PrintableChecklist({ modelo, codigo, user, habilitacao =
           <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Gerado por: {user?.name || '-'}</div>
         </header>
 
+        {empresa && (empresa.razaoSocial || empresa.cnpj) && (
+          <section style={{ marginBottom: 12 }}>
+            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Empresa</h2>
+            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+              <div><strong>Razão Social:</strong> {empresa.razaoSocial || '-'}</div>
+              <div><strong>CNPJ:</strong> {empresa.cnpj || '-'} {empresa.inscricaoEstadual ? `— IE: ${empresa.inscricaoEstadual}` : ''} {empresa.inscricaoMunicipal ? `— IM: ${empresa.inscricaoMunicipal}` : ''}</div>
+              <div><strong>Endereço:</strong> {[empresa.endereco, empresa.cidade, empresa.uf, empresa.cep].filter(Boolean).join(' — ') || '-'}</div>
+              <div><strong>Contato:</strong> {[empresa.telefone, empresa.email].filter(Boolean).join(' — ') || '-'}</div>
+            </div>
+          </section>
+        )}
+
         <section style={{ marginBottom: 12 }}>
           <h2 style={{ fontSize: 16, marginBottom: 8 }}>1. Dados da Licitação</h2>
           <div style={{ fontSize: 12, lineHeight: 1.5 }}>
             <div><strong>Ano:</strong> {modelo?.ano}</div>
             <div><strong>Código:</strong> {modelo?.codigo}</div>
-            <div><strong>Contratante:</strong> {modelo?.contratado || modelo?.empresa?.razaoSocial || '-'}</div>
+            <div><strong>Contratante:</strong> {modelo?.contratado || '-'}</div>
             <div><strong>Número do Pregão:</strong> {modelo?.numeroPregao || '-'}</div>
             <div><strong>Número do Processo:</strong> {modelo?.numeroProcesso || '-'}</div>
             <div><strong>Portal:</strong> {modelo?.portal || '-'}</div>
-            <div><strong>Data da Licitação:</strong> {modelo?.dataLicitacao || '-'}</div>
+            <div><strong>Data de Credenciamento:</strong> {formatDateTimeBR(modelo?.dataCredenciamento, modelo?.horaCredenciamento)}</div>
+            <div><strong>Data da Licitação:</strong> {formatDateTimeBR(modelo?.dataLicitacao, modelo?.horaLicitacao)}</div>
             <div><strong>Tipo Objeto:</strong> {modelo?.tipoObjeto || '-'}</div>
+            <div><strong>Objeto Licitação:</strong> {modelo?.objetoLicitacao || '-'}</div>
             <div><strong>Tipo de disputa:</strong> {modelo?.tipoDisputa || '-'}</div>
             <div><strong>Definição do Julgamento:</strong> {modelo?.definJulgamento || '-'}</div>
           </div>

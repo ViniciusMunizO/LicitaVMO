@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { dbGet, migrateFromLocalStorage } from '../utils/db'
+import { combineDateTime, formatDateTimeBR } from '../utils/date'
 
 type Licitacao = {
   codigo: number
@@ -10,6 +11,7 @@ type Licitacao = {
   contratante?: { codigo?: number; nome?: string }
   empresa?: { razaoSocial?: string }
   dataLicitacao?: string
+  horaLicitacao?: string
   tipoObjeto?: string
   tipoDisputa?: string
   [key: string]: any
@@ -17,13 +19,6 @@ type Licitacao = {
 
 function contratanteNome(l: Licitacao) {
   return l.contratante?.nome || l.contratado || l.empresa?.razaoSocial || 'Sem contratante'
-}
-
-function formatDate(raw?: string) {
-  if (!raw) return '-'
-  const d = new Date(raw)
-  if (isNaN(d.getTime())) return raw
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 function StatTile({ label, value }: { label: string; value: number | string }) {
@@ -99,7 +94,10 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const thisYear = licitacoes.filter(l => l.ano === currentYear).length
-    const upcoming = licitacoes.filter(l => l.dataLicitacao && new Date(l.dataLicitacao).getTime() >= now)
+    const upcoming = licitacoes.filter(l => {
+      const d = combineDateTime(l.dataLicitacao, l.horaLicitacao)
+      return d !== null && d.getTime() >= now
+    })
     return { total: licitacoes.length, thisYear, upcomingCount: upcoming.length, upcoming }
   }, [licitacoes, currentYear, now])
 
@@ -109,7 +107,7 @@ export default function Dashboard() {
   const proximas = useMemo(() => {
     return stats.upcoming
       .slice()
-      .sort((a, b) => new Date(a.dataLicitacao!).getTime() - new Date(b.dataLicitacao!).getTime())
+      .sort((a, b) => (combineDateTime(a.dataLicitacao, a.horaLicitacao)?.getTime() || 0) - (combineDateTime(b.dataLicitacao, b.horaLicitacao)?.getTime() || 0))
       .slice(0, 5)
   }, [stats.upcoming])
 
@@ -162,7 +160,7 @@ export default function Dashboard() {
                         <Link to={`/licitacoes/${l.codigo}`} className="link-primary font-medium">{contratanteNome(l)}</Link>
                         <div className="text-gray-500">Código {l.codigo} • {l.tipoObjeto || 'Sem tipo'}</div>
                       </div>
-                      <div className="text-gray-600">{formatDate(l.dataLicitacao)}</div>
+                      <div className="text-gray-600">{formatDateTimeBR(l.dataLicitacao, l.horaLicitacao)}</div>
                     </li>
                   ))}
                 </ul>
@@ -178,7 +176,7 @@ export default function Dashboard() {
                       <Link to={`/licitacoes/${l.codigo}`} className="link-primary font-medium">{contratanteNome(l)}</Link>
                       <div className="text-gray-500">Código {l.codigo} • Ano {l.ano}</div>
                     </div>
-                    <div className="text-gray-600">{formatDate(l.dataLicitacao)}</div>
+                    <div className="text-gray-600">{formatDateTimeBR(l.dataLicitacao, l.horaLicitacao)}</div>
                   </li>
                 ))}
               </ul>

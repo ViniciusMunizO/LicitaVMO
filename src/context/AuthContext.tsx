@@ -1,14 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react'
+import { findUserByCredentials } from '../utils/auth'
 
 type User = {
   id: number
   name: string
-  role: 'admin' | 'user'
+  login: string
+  role: 'admin' | 'moderador' | 'user'
 }
 
 type AuthContextValue = {
   user: User | null
-  login: (name: string, password: string) => Promise<void>
+  login: (login: string, password: string) => Promise<void>
   logout: () => void
 }
 
@@ -20,10 +22,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return raw ? JSON.parse(raw) as User : null
   })
 
-  const login = async (name: string, password: string) => {
-    // simple stub: any password allowed; 'admin' user becomes administrator
-    const u: User = { id: 1, name, role: name === 'admin' ? 'admin' : 'user' }
-    localStorage.setItem('user_name', name)
+  const login = async (loginInput: string, password: string) => {
+    const found = await findUserByCredentials(loginInput.trim(), password)
+    if (!found) throw new Error('Login ou senha inválidos')
+    const u: User = { id: found.id, name: found.name, login: found.login, role: found.role }
+    localStorage.setItem('user_name', u.name)
     localStorage.setItem('auth_user', JSON.stringify(u))
     setUser(u)
   }
