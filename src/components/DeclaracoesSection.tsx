@@ -11,6 +11,28 @@ function slugify(s: string) {
     .toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
+// Campos que aparecem nas declarações — se algum estiver faltando, o texto
+// gerado sai com lacunas, então avisamos antes de deixar emitir.
+const REQUIRED_EMPRESA_FIELDS: { key: string; label: string }[] = [
+  { key: 'razaoSocial', label: 'Razão Social' },
+  { key: 'cnpj', label: 'CNPJ' },
+  { key: 'endereco', label: 'Endereço' },
+  { key: 'cep', label: 'CEP' },
+  { key: 'cidade', label: 'Cidade' },
+  { key: 'uf', label: 'UF' },
+  { key: 'telefone', label: 'Telefone' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'banco', label: 'Banco' },
+  { key: 'agencia', label: 'Agência' },
+  { key: 'conta', label: 'Conta' },
+  { key: 'representanteNome', label: 'Nome do Representante Legal' },
+  { key: 'representanteCargo', label: 'Cargo' },
+  { key: 'representanteCpf', label: 'CPF' },
+  { key: 'representanteRg', label: 'RG' },
+]
+
+const DECLARACOES_ORDENADAS = [...DECLARACOES].sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'))
+
 export default function DeclaracoesSection({ modelo }: { modelo: any }) {
   const [empresa, setEmpresa] = useState<any>(null)
   const [current, setCurrent] = useState<{ titulo: string; corpo: string; ctx: DeclaracaoContext; filename: string } | null>(null)
@@ -37,7 +59,8 @@ export default function DeclaracoesSection({ modelo }: { modelo: any }) {
     return () => { cancelled = true }
   }, [current])
 
-  const empresaVazia = !empresa || !empresa.razaoSocial
+  const camposFaltando = REQUIRED_EMPRESA_FIELDS.filter(f => !empresa?.[f.key])
+  const empresaIncompleta = !empresa || camposFaltando.length > 0
 
   const gerar = (titulo: string, corpoTemplate: string) => {
     const ctx = buildDeclaracaoContext(empresa, modelo)
@@ -57,19 +80,30 @@ export default function DeclaracoesSection({ modelo }: { modelo: any }) {
   return (
     <div className="mt-6">
       <h4 className="font-semibold mb-2">Declarações</h4>
-      {empresaVazia && (
-        <div className="text-sm text-yellow-700 bg-yellow-50 border-l-4 border-yellow-400 p-2 mb-3">
-          Cadastre as <Link to="/empresa" className="link-primary">Informações da Empresa</Link> antes de emitir declarações.
+      {empresaIncompleta && (
+        <div className="text-sm text-yellow-700 bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-3">
+          {!empresa ? (
+            <div>Cadastre as <Link to="/empresa" className="link-primary">Informações da Empresa</Link> antes de emitir declarações.</div>
+          ) : (
+            <>
+              <div>Faltam dados nas <Link to="/empresa" className="link-primary">Informações da Empresa</Link> — as declarações podem sair com lacunas:</div>
+              <div className="mt-1 text-xs text-yellow-800">{camposFaltando.map(f => f.label).join(', ')}</div>
+            </>
+          )}
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        {DECLARACOES.map(d => (
-          <button key={d.id} type="button" onClick={() => gerar(d.titulo, d.corpo)} className="btn btn-ghost text-xs">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {DECLARACOES_ORDENADAS.map(d => (
+          <button key={d.id} type="button" onClick={() => gerar(d.titulo, d.corpo)} className="btn btn-ghost text-xs justify-start text-left">
             {d.titulo}
           </button>
         ))}
+      </div>
+
+      <div className="mt-3 pt-3 border-t">
         <button type="button" onClick={() => setShowCustom(true)} className="btn btn-primary text-xs">
-          Declaração Personalizada
+          + Declaração Personalizada
         </button>
       </div>
 

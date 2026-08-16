@@ -59,3 +59,16 @@ export function nowDateExtensoBR(): string {
   const get = (type: string) => parts.find(p => p.type === type)?.value || ''
   return `${get('day')} de ${get('month')} de ${get('year')}`
 }
+
+// Soma meses a uma data "YYYY-MM-DD", usado para calcular o fim de vigência
+// de uma ata/contrato a partir do início + quantidade de meses.
+export function addMonthsToDate(dateValue: string, months: number): string {
+  const { date } = splitLegacyDateTime(dateValue)
+  const [y, m, d] = date.split('-').map(Number)
+  if (!y || !m || !d) return ''
+  const result = new Date(y, m - 1 + months, d)
+  const yyyy = result.getFullYear()
+  const mm = String(result.getMonth() + 1).padStart(2, '0')
+  const dd = String(result.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}

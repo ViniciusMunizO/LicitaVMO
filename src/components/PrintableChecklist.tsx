@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { dbGet } from '../utils/db'
 import { formatDateTimeBR } from '../utils/date'
+import { formatNumeric } from '../utils/format'
 
 type Props = {
   modelo: any
@@ -9,6 +10,58 @@ type Props = {
   habilitacao?: any
   page1Ref?: React.RefObject<HTMLDivElement>
   page2Ref?: React.RefObject<HTMLDivElement>
+}
+
+const PRIMARY = '#2C2D7D'
+const BOX_BG = '#f6f6fb'
+const BOX_BORDER = '#e4e4f0'
+
+const HABILITACAO_ITEMS: { key: string; label: string }[] = [
+  { key: 'habilitacaoJuridica', label: 'Habilitação Jurídica' },
+  { key: 'habilitacaoFiscal', label: 'Habilitação Fiscal, Social e Trabalhista' },
+  { key: 'balanco', label: 'Balanço' },
+  { key: 'anvisa', label: 'Anvisa' },
+  { key: 'boasPraticas', label: 'Boas Práticas' },
+  { key: 'laudo', label: 'Laudo' },
+  { key: 'bula', label: 'Bula' },
+  { key: 'ggrem', label: 'GGREM' },
+  { key: 'cti', label: 'CTI com Transportadora' },
+]
+
+const ITEM_COLUMNS: { key: string; label: string; width: string; fallback?: string[]; numeric?: boolean }[] = [
+  { key: 'item', label: 'Item', width: '4%' },
+  { key: 'descricao', label: 'Descrição', width: '18%', fallback: ['description'] },
+  { key: 'unidade', label: 'Uni', width: '5%' },
+  { key: 'quantidade', label: 'Qtd', width: '5%', fallback: ['qty'], numeric: true },
+  { key: 'valorEdital', label: 'Valor Edital', width: '8%', numeric: true },
+  { key: 'totalEdital', label: 'Total', width: '8%', numeric: true },
+  { key: 'marca', label: 'Marca', width: '9%' },
+  { key: 'apresentacao', label: 'Apresentação', width: '11%' },
+  { key: 'anvisa', label: 'Nº Anvisa', width: '8%' },
+  { key: 'valorCusto', label: 'Valor Custo', width: '8%', numeric: true },
+  { key: 'tx', label: 'TX', width: '4%', numeric: true },
+  { key: 'custoUnitario', label: 'Custo + TX (Uni)', width: '8%', numeric: true },
+  { key: 'totalCusto', label: 'Total Custo', width: '8%', numeric: true },
+  { key: 'status', label: 'Status', width: '7%' },
+  { key: 'custoCaixa', label: 'Custo Caixa', width: '8%', numeric: true },
+]
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ fontSize: 9, color: '#777', textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 12 }}>{value || '-'}</div>
+    </div>
+  )
+}
+
+function Box({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section style={{ background: BOX_BG, border: `1px solid ${BOX_BORDER}`, borderRadius: 6, padding: 12, marginBottom: 12 }}>
+      <h2 style={{ fontSize: 13, margin: '0 0 8px 0', color: PRIMARY, borderBottom: `1px solid ${BOX_BORDER}`, paddingBottom: 6 }}>{title}</h2>
+      {children}
+    </section>
+  )
 }
 
 export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref }: Props) {
@@ -30,89 +83,145 @@ export default function PrintableChecklist({ modelo, codigo, user, habilitacao =
   return (
     <>
       <div id="print-page-1" ref={page1Ref} style={{ width: '794px', padding: 28, paddingTop: 48, background: '#fff', color: '#000', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
-        <header style={{ marginBottom: 14, borderBottom: '1px solid #e6e6e6', paddingBottom: 8 }}>
-          <h1 style={{ fontSize: 22, margin: 0 }}>Checklist - Licitação {codigo}</h1>
-          <div style={{ fontSize: 12, color: '#444', marginTop: 4 }}>Gerado por: {user?.name || '-'}</div>
+        <header style={{ marginBottom: 14, borderBottom: `2px solid ${PRIMARY}`, paddingBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <h1 style={{ fontSize: 20, margin: 0, color: PRIMARY }}>Checklist — Licitação {codigo}{modelo?.ano ? ` / ${modelo.ano}` : ''}</h1>
+          <div style={{ fontSize: 10, color: '#666' }}>Gerado por: {user?.name || '-'}</div>
         </header>
 
         {empresa && (empresa.razaoSocial || empresa.cnpj) && (
-          <section style={{ marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, marginBottom: 8 }}>Empresa</h2>
-            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-              <div><strong>Razão Social:</strong> {empresa.razaoSocial || '-'}</div>
-              <div><strong>CNPJ:</strong> {empresa.cnpj || '-'} {empresa.inscricaoEstadual ? `— IE: ${empresa.inscricaoEstadual}` : ''} {empresa.inscricaoMunicipal ? `— IM: ${empresa.inscricaoMunicipal}` : ''}</div>
-              <div><strong>Endereço:</strong> {[empresa.endereco, empresa.cidade, empresa.uf, empresa.cep].filter(Boolean).join(' — ') || '-'}</div>
-              <div><strong>Contato:</strong> {[empresa.telefone, empresa.email].filter(Boolean).join(' — ') || '-'}</div>
+          <Box title="Empresa">
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Razão Social" value={empresa.razaoSocial} />
+                <Field label="CNPJ" value={[empresa.cnpj, empresa.inscricaoEstadual ? `IE: ${empresa.inscricaoEstadual}` : ''].filter(Boolean).join('  —  ')} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Endereço" value={[empresa.endereco, empresa.cidade, empresa.uf].filter(Boolean).join(' — ')} />
+                <Field label="Contato" value={[empresa.telefone, empresa.email].filter(Boolean).join('  —  ')} />
+              </div>
             </div>
-          </section>
+          </Box>
         )}
 
-        <section style={{ marginBottom: 12 }}>
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>1. Dados da Licitação</h2>
-          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-            <div><strong>Ano:</strong> {modelo?.ano}</div>
-            <div><strong>Código:</strong> {modelo?.codigo}</div>
-            <div><strong>Contratante:</strong> {modelo?.contratado || '-'}</div>
-            <div><strong>Número do Pregão:</strong> {modelo?.numeroPregao || '-'}</div>
-            <div><strong>Número do Processo:</strong> {modelo?.numeroProcesso || '-'}</div>
-            <div><strong>Portal:</strong> {modelo?.portal || '-'}</div>
-            <div><strong>Data de Credenciamento:</strong> {formatDateTimeBR(modelo?.dataCredenciamento, modelo?.horaCredenciamento)}</div>
-            <div><strong>Data da Licitação:</strong> {formatDateTimeBR(modelo?.dataLicitacao, modelo?.horaLicitacao)}</div>
-            <div><strong>Tipo Objeto:</strong> {modelo?.tipoObjeto || '-'}</div>
-            <div><strong>Objeto Licitação:</strong> {modelo?.objetoLicitacao || '-'}</div>
-            <div><strong>Tipo de disputa:</strong> {modelo?.tipoDisputa || '-'}</div>
-            <div><strong>Definição do Julgamento:</strong> {modelo?.definJulgamento || '-'}</div>
-          </div>
-        </section>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <Box title="1. Dados da Licitação">
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Contratante" value={modelo?.contratado} />
+                  <Field label="Nº do Pregão" value={modelo?.numeroPregao} />
+                  <Field label="Portal" value={modelo?.portal} />
+                  <Field label="Tipo Objeto" value={modelo?.tipoObjeto} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Ano / Código" value={`${modelo?.ano || '-'} / ${modelo?.codigo ?? '-'}`} />
+                  <Field label="Nº do Processo" value={modelo?.numeroProcesso} />
+                  <Field label="Tipo de Disputa" value={modelo?.tipoDisputa} />
+                  <Field label="Julgamento" value={modelo?.definJulgamento} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data de Credenciamento" value={formatDateTimeBR(modelo?.dataCredenciamento, modelo?.horaCredenciamento)} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data da Licitação" value={formatDateTimeBR(modelo?.dataLicitacao, modelo?.horaLicitacao)} />
+                </div>
+              </div>
+              {modelo?.objetoLicitacao && <Field label="Objeto" value={<span style={{ whiteSpace: 'pre-wrap' }}>{modelo.objetoLicitacao}</span>} />}
+            </Box>
 
-        <section style={{ marginBottom: 12 }}>
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>2. Habilitação</h2>
-          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-            <div>Habilitação Jurídica: {habilitacao.habilitacaoJuridica ? 'Sim' : 'Não'}</div>
-            <div>Habilitação Fiscal, Social e Trabalhista: {habilitacao.habilitacaoFiscal ? 'Sim' : 'Não'}</div>
-            <div>Balanço: {habilitacao.balanco ? 'Sim' : 'Não'}</div>
-            <div>Anvisa: {habilitacao.anvisa ? 'Sim' : 'Não'}</div>
-            <div>Boas Práticas: {habilitacao.boasPraticas ? 'Sim' : 'Não'}</div>
-            <div>Laudo: {habilitacao.laudo ? 'Sim' : 'Não'}</div>
-            <div>Bula: {habilitacao.bula ? 'Sim' : 'Não'}</div>
-            <div>GGREM: {habilitacao.ggrem ? 'Sim' : 'Não'}</div>
-            <div>CTI com Transportadora: {habilitacao.cti ? 'Sim' : 'Não'}</div>
-            <div>Outras declarações: {habilitacao.outrasTexto || '-'}</div>
-            <div style={{ marginTop: 8 }}><strong>Observação interna:</strong> {habilitacao.observacaoInterna || '-'}</div>
+            <Box title="3. Proposta">
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Validade da Proposta" value={modelo?.prazoValidade} />
+                  <Field label="Prazo de Entrega" value={modelo?.prazoEntrega} />
+                  <Field label="Local de Entrega" value={modelo?.localEntrega} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Prazo de Pagamento" value={modelo?.prazoPagamento} />
+                  <Field label="Prazo de Garantia" value={modelo?.prazoGarantia || 'Conforme Edital'} />
+                  <Field label="Vigência do Contrato" value={modelo?.vigenciaContrato || '12 (doze) meses'} />
+                </div>
+              </div>
+            </Box>
           </div>
-        </section>
 
-        <section>
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>3. Proposta</h2>
-          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
-            <div>Prazo de Validade: {modelo?.prazoValidade || '-'}</div>
-            <div>Prazo de entrega: {modelo?.prazoEntrega || '-'}</div>
-            <div>Local de Entrega: {modelo?.localEntrega || '-'}</div>
-            <div>Prazo de Pagamento: {modelo?.prazoPagamento || '-'}</div>
-            <div>Prazo de garantia: {modelo?.prazoGarantia || 'Conforme Edital'}</div>
-            <div>Vigência do contrato: {modelo?.vigenciaContrato || '12 (doze) meses'}</div>
-            <div style={{ marginTop: 8 }}><strong>Declarações:</strong></div>
-            <div style={{ fontSize: 11 }}>{modelo?.declaracoes || ''}</div>
+          <div style={{ flex: 1 }}>
+            <Box title="2. Habilitação">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px' }}>
+                {HABILITACAO_ITEMS.map(({ key, label }) => {
+                  const checked = !!habilitacao?.[key]
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5 }}>
+                      <span style={{ color: checked ? '#1a8f4c' : '#aaa', fontWeight: 700, width: 10, display: 'inline-block' }}>{checked ? '✓' : '—'}</span>
+                      <span style={{ color: checked ? '#000' : '#999' }}>{label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+              {habilitacao?.outras && habilitacao?.outrasTexto && (
+                <div style={{ marginTop: 8 }}><Field label="Outras declarações" value={habilitacao.outrasTexto} /></div>
+              )}
+              {habilitacao?.observacaoInterna && (
+                <div style={{ marginTop: 4 }}><Field label="Observação interna" value={habilitacao.observacaoInterna} /></div>
+              )}
+            </Box>
+
+            <Box title="Anexos">
+              {attachments.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#777' }}>Nenhum anexo.</div>
+              ) : (
+                <div style={{ fontSize: 11 }}>
+                  {attachments.map((a, i) => (
+                    <div key={i} style={{ marginBottom: 3 }}>
+                      {a.name || `anexo-${i + 1}`}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Box>
           </div>
-        </section>
-
-        <section style={{ marginTop: 12 }}>
-          <h2 style={{ fontSize: 16, marginBottom: 8 }}>Anexos</h2>
-          <div style={{ fontSize: 12 }}>{attachments.map(a => a.name).join(', ') || 'Nenhum'}</div>
-        </section>
+        </div>
       </div>
 
-      <div id="print-page-2" ref={page2Ref} style={{ width: '794px', padding: 24, paddingTop: 48, background: '#fff', color: '#000', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
-        <h2 style={{ fontSize: 18, marginBottom: 10 }}>4. Itens</h2>
-        <div style={{ fontSize: 11, lineHeight: 1.4 }}>
-          {items.length === 0 && <div>Nenhum item importado.</div>}
-          {items.map((it, i) => (
-            <div key={i} style={{ borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 8 }}>
-              <div style={{ fontWeight: 600 }}>Item {i + 1}</div>
-              <div>{Object.entries(it).map(([k, v]) => `${k}: ${v}`).join(' — ')}</div>
-            </div>
-          ))}
-        </div>
+      <div id="print-page-2" ref={page2Ref} style={{ width: '1100px', padding: 24, paddingTop: 48, background: '#fff', color: '#000', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
+        <h2 style={{ fontSize: 18, marginBottom: 10, color: PRIMARY }}>Itens — Licitação {codigo}</h2>
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12 }}>Nenhum item importado.</div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
+            <colgroup>
+              {ITEM_COLUMNS.map(c => <col key={c.key} style={{ width: c.width }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                {ITEM_COLUMNS.map(c => (
+                  <th key={c.key} style={{ textAlign: 'left', background: PRIMARY, color: '#fff', padding: '5px 6px' }}>{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => (
+                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f6f6fb' }}>
+                  {ITEM_COLUMNS.map(c => {
+                    let value = it[c.key]
+                    if ((value === undefined || value === '') && c.fallback) {
+                      for (const f of c.fallback) { if (it[f] !== undefined && it[f] !== '') { value = it[f]; break } }
+                    }
+                    const isText = c.key === 'descricao' || c.key === 'apresentacao'
+                    const display = c.numeric ? formatNumeric(value) : (value === undefined || value === null || value === '' ? '-' : String(value))
+                    return (
+                      <td key={c.key} style={{ padding: '4px 6px', borderBottom: '1px solid #eee', whiteSpace: isText ? 'normal' : 'nowrap', wordBreak: isText ? 'break-word' : 'normal' }}>
+                        {display}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   )

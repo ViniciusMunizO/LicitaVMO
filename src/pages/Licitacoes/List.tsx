@@ -6,6 +6,7 @@ import { formatDateTimeBR } from '../../utils/date'
 export default function ListLicitacoes() {
   const [list, setList] = useState<any[]>([])
   const [hasAtaByCodigo, setHasAtaByCodigo] = useState<Record<string, boolean>>({})
+  const [itemsTextByCodigo, setItemsTextByCodigo] = useState<Record<string, string>>({})
   const [listOptions, setListOptions] = useState<any>({ page: 1, pageSize: 10, sortBy: 'codigo', sortDir: 'desc' })
   const [filters, setFilters] = useState<any>({ codigo: '', contratante: '', numeroPregao: '', numeroProcesso: '', tipoObjeto: '', tipoDisputa: '', hasAta: 'any', q: '' })
   const [searchTerm, setSearchTerm] = useState('')
@@ -18,11 +19,19 @@ export default function ListLicitacoes() {
       const items: any[] = raw || []
       setList(items)
       const entries = await Promise.all(items.map(async (l) => {
-        const attachments = await dbGet(`attachments_${l.codigo}`)
-        return [String(l.codigo), Array.isArray(attachments) && attachments.length > 0] as const
+        const atas = await dbGet(`atas_${l.codigo}`)
+        return [String(l.codigo), Array.isArray(atas) && atas.length > 0] as const
       }))
       if (!mounted) return
       setHasAtaByCodigo(Object.fromEntries(entries))
+
+      const itemsEntries = await Promise.all(items.map(async (l) => {
+        const its = await dbGet(`items_${l.codigo}`)
+        const text = Array.isArray(its) ? its.map((it: any) => JSON.stringify(it)).join(' ') : ''
+        return [String(l.codigo), text] as const
+      }))
+      if (!mounted) return
+      setItemsTextByCodigo(Object.fromEntries(itemsEntries))
     })
     return () => { mounted = false }
   }, [])
@@ -58,7 +67,7 @@ export default function ListLicitacoes() {
       if (filters.hasAta === 'no' && has) return false
     }
     if (filters.q) {
-      const hay = JSON.stringify(l).toLowerCase()
+      const hay = (JSON.stringify(l) + ' ' + (itemsTextByCodigo[String(l.codigo)] || '')).toLowerCase()
       if (!hay.includes(String(filters.q).toLowerCase())) return false
     }
     return true
@@ -153,9 +162,16 @@ export default function ListLicitacoes() {
                 <tr key={i} className="border-t">
                   <td className="p-2">{l.codigo}</td>
                   <td className="p-2">{l.ano}</td>
-                  <td className="p-2">{(l.contratante?.codigo ? `${l.contratante.codigo} — ` : '') + (l.contratante?.nome || l.contratado || l.empresa?.razaoSocial || '')}</td>
+                  <td className="p-2">{l.contratante?.nome || l.contratado || l.empresa?.razaoSocial || '-'}</td>
                   <td className="p-2">{formatDateTimeBR(l.dataLicitacao, l.horaLicitacao)}</td>
-                  <td className="p-2">{l.situacao || '-'}</td>
+                  <td className="p-2">
+                    <span className={
+                      l.status === 'Ganhou' ? 'text-green-600 font-medium'
+                        : l.status === 'Perdeu' ? 'font-medium' : 'text-gray-500'
+                    } style={l.status === 'Perdeu' ? { color: 'var(--color-error)' } : undefined}>
+                      {l.status || 'Sem status'}
+                    </span>
+                  </td>
                   <td className="p-2">
                       <Link to={`/licitacoes/${l.codigo}`} className="text-sm link-primary">Ver</Link>
                       <Link to={`/licitacoes/novo?edit=${l.codigo}`} className="ml-3 text-sm link-secondary">Editar</Link>

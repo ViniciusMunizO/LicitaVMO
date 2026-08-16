@@ -5,18 +5,13 @@ type Attachment = {
   name: string
   filename: string
   data: string // base64
-  category?: string
   date?: string
-  linkedItemIndex?: number | null
 }
 
 export default function AttachmentsModal({ open, onClose, codigo }: { open: boolean; onClose: () => void; codigo: number }) {
   const key = `attachments_${codigo}`
   const [list, setList] = useState<Attachment[]>([])
   const [name, setName] = useState('')
-  const [category, setCategory] = useState('ATA')
-  const [items, setItems] = useState<any[]>([])
-  const [linkedItemIndex, setLinkedItemIndex] = useState<number | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -25,10 +20,6 @@ export default function AttachmentsModal({ open, onClose, codigo }: { open: bool
       const raw = await db.dbGet(key)
       if (!mounted) return
       setList(raw || [])
-      try {
-        const its = (await db.dbGet(`items_${codigo}`)) || []
-        if (mounted) setItems(its)
-      } catch (err) { /* ignore */ }
     })
     return () => { mounted = false }
   }, [open, codigo])
@@ -43,16 +34,12 @@ export default function AttachmentsModal({ open, onClose, codigo }: { open: bool
         name: name || f.name,
         filename: f.name,
         data,
-        category,
         date: new Date().toISOString(),
-        linkedItemIndex: linkedItemIndex !== null ? linkedItemIndex : null,
       }
       const updated = [...list, att]
       setList(updated)
       import('../utils/db').then(async db => await db.dbSet(key, updated))
       setName('')
-      setCategory('ATA')
-      setLinkedItemIndex(null)
       void recordUpload(att)
     }
     reader.readAsDataURL(f)
@@ -70,7 +57,7 @@ export default function AttachmentsModal({ open, onClose, codigo }: { open: bool
     try {
       const { auditLog } = await import('../utils/audit')
       const user = localStorage.getItem('user_name') || undefined
-      await auditLog('attachment_upload', { codigo, name: att.name, filename: att.filename, category: att.category, linkedItemIndex: att.linkedItemIndex }, user)
+      await auditLog('attachment_upload', { codigo, name: att.name, filename: att.filename }, user)
     } catch (err) { /* ignore */ }
   }
 
@@ -117,26 +104,13 @@ export default function AttachmentsModal({ open, onClose, codigo }: { open: bool
         </div>
 
         <div className="mb-4">
-          <label className="block text-sm">Nome do documento (opcional)</label>
-          <input value={name} onChange={e => setName(e.target.value)} className="w-full p-2 rounded" />
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            <select value={category} onChange={e => setCategory(e.target.value)} className="p-2 rounded">
-              <option>ATA</option>
-              <option>Proposta</option>
-              <option>Reequilibrio</option>
-              <option>Anexo</option>
-              <option>Outros</option>
-            </select>
-            <select value={linkedItemIndex !== null ? String(linkedItemIndex) : ''} onChange={e => setLinkedItemIndex(e.target.value === '' ? null : Number(e.target.value))} className="p-2 rounded">
-              <option value="">Vincular a item (opcional)</option>
-              {items.map((it, idx) => (<option key={idx} value={String(idx)}>#{idx+1} — {it.descricao || it.description || it.nome || 'item'}</option>))}
-            </select>
-            <div>
-              <label className="btn btn-ghost inline-flex items-center gap-2">
-                <input type="file" onChange={e => onFile(e.target.files?.[0] || null)} className="hidden" />
-                Selecionar arquivo
-              </label>
-            </div>
+          <label className="block text-sm">Título do documento</label>
+          <div className="mt-1 flex gap-2">
+            <input value={name} onChange={e => setName(e.target.value)} className="flex-1 p-2 rounded" placeholder="Ex: Edital, Comprovante de entrega..." />
+            <label className="btn btn-ghost inline-flex items-center gap-2">
+              <input type="file" onChange={e => onFile(e.target.files?.[0] || null)} className="hidden" />
+              Selecionar arquivo
+            </label>
           </div>
         </div>
 

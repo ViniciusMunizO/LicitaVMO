@@ -18,12 +18,17 @@ type Licitacao = {
   portal?: string
   tipoObjeto?: string
   objetoLicitacao?: string
+  status?: string
   dataCredenciamento?: string
   horaCredenciamento?: string
   dataLicitacao?: string
   horaLicitacao?: string
   tipoDisputa?: string
   definJulgamento?: string
+  prazoValidade?: string
+  prazoEntrega?: string
+  localEntrega?: string
+  prazoPagamento?: string
   prazoGarantia?: string
   vigenciaContrato?: string
   habilitacao?: any
@@ -43,6 +48,7 @@ export default function FormLicitacao() {
   const location = useLocation()
   const [modelo, setModelo] = useState<Licitacao>({ codigo: 0, ano: new Date().getFullYear() })
   const [selectedContratante, setSelectedContratante] = useState<any>(null)
+  const [contratanteFocused, setContratanteFocused] = useState(false)
   const [showAttachmentsModal, setShowAttachmentsModal] = useState(false)
   const [showItemsImportModal, setShowItemsImportModal] = useState(false)
   const [showContractorModal, setShowContractorModal] = useState(false)
@@ -152,17 +158,26 @@ export default function FormLicitacao() {
         </div>
 
         <div>
+          <label className="block text-sm text-gray-600">Status</label>
+          <select value={(modelo as any).status || ''} onChange={e => setModelo({ ...modelo, status: e.target.value })} className="w-full p-2 rounded">
+            <option value="">(sem status)</option>
+            <option value="Ganhou">Ganhou</option>
+            <option value="Perdeu">Perdeu</option>
+          </select>
+        </div>
+
+        <div>
           <label className="block text-sm text-gray-600">Contratante</label>
           <div className="relative">
             <input placeholder="Município" value={selectedContratante ? `${selectedContratante.nome} / ${selectedContratante.uf}` : (modelo.contratado || '')} onChange={e => {
               setModelo({ ...modelo, contratado: e.target.value })
               setSelectedContratante(null)
-            }} className="w-full p-2 rounded" onFocus={() => { if (contratantes.length === 0) { /* no-op */ } }} />
+            }} className="w-full p-2 rounded" onFocus={() => setContratanteFocused(true)} onBlur={() => setContratanteFocused(false)} />
             <div className="absolute right-2 top-2">
               <button type="button" onClick={() => setShowContractorModal(true)} className="btn btn-ghost">Selecionar/Cadastrar</button>
             </div>
               {/* suggestions */}
-              {String(modelo.contratado || '').trim().length > 0 && (
+              {contratanteFocused && !selectedContratante && String(modelo.contratado || '').trim().length > 0 && (
                 (() => {
                   const q = String(modelo.contratado || '').toLowerCase()
                   const matches = contratantes.filter(c => c.nome.toLowerCase().includes(q) || c.uf.toLowerCase().includes(q)).slice(0, 20)
@@ -240,7 +255,7 @@ export default function FormLicitacao() {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-gray-600">Tipo de disputa</label>
             <select value={(modelo as any).tipoDisputa || ''} onChange={e => setModelo({ ...modelo, tipoDisputa: e.target.value })} className="w-full p-2 rounded">
@@ -259,15 +274,36 @@ export default function FormLicitacao() {
               <option>Lote</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm text-gray-600">Prazo de garantia</label>
-            <input value={(modelo as any).prazoGarantia || 'Conforme Edital'} onChange={e => setModelo({ ...modelo, prazoGarantia: e.target.value })} className="w-full p-2 rounded" />
-          </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-gray-600">Vigência do contrato</label>
-          <input value={(modelo as any).vigenciaContrato || '12 (doze) meses'} onChange={e => setModelo({ ...modelo, vigenciaContrato: e.target.value })} className="w-full p-2 rounded" />
+        <div className="mt-2 bg-white border rounded p-4">
+          <h4 className="font-semibold mb-3">Proposta</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-600">Validade da Proposta</label>
+              <input value={(modelo as any).prazoValidade || ''} onChange={e => setModelo({ ...modelo, prazoValidade: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Prazo de Entrega</label>
+              <input value={(modelo as any).prazoEntrega || ''} onChange={e => setModelo({ ...modelo, prazoEntrega: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Local de Entrega</label>
+              <input value={(modelo as any).localEntrega || ''} onChange={e => setModelo({ ...modelo, localEntrega: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Prazo de Pagamento</label>
+              <input value={(modelo as any).prazoPagamento || ''} onChange={e => setModelo({ ...modelo, prazoPagamento: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Prazo de Garantia</label>
+              <input value={(modelo as any).prazoGarantia || 'Conforme Edital'} onChange={e => setModelo({ ...modelo, prazoGarantia: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-600">Vigência do Contrato</label>
+              <input value={(modelo as any).vigenciaContrato || '12 (doze) meses'} onChange={e => setModelo({ ...modelo, vigenciaContrato: e.target.value })} className="w-full p-2 rounded" />
+            </div>
+          </div>
         </div>
 
         <div className="mt-6 bg-white border rounded p-4">
