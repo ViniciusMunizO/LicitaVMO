@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate, useLocation } from 'react-router-dom'
 import ContractorModal from '../../components/ContractorModal'
 import AttachmentsModal from '../../components/AttachmentsModal'
 import ItemsImportModal from '../../components/ItemsImportModal'
-import PrintableChecklist from '../../components/PrintableChecklist'
-import { exportElementsToPdf } from '../../utils/pdf'
 import { nowInBrasilia } from '../../utils/date'
 import { DateInputBR, TimeInputBR } from '../../components/DateTimeBR'
 
@@ -53,11 +51,6 @@ export default function FormLicitacao() {
   const [showItemsImportModal, setShowItemsImportModal] = useState(false)
   const [showContractorModal, setShowContractorModal] = useState(false)
   const [contratantes, setContratantes] = useState<any[]>([])
-  const checklistRef = useRef<HTMLDivElement | null>(null)
-  const page1Ref = useRef<HTMLDivElement | null>(null)
-  const page2Ref = useRef<HTMLDivElement | null>(null)
-  const itemsOnlyRef = useRef<HTMLDivElement | null>(null)
-  const [warnings, setWarnings] = useState<string[]>([])
   const [habilitacao, setHabilitacao] = useState<any>({
     habilitacaoJuridica: false,
     habilitacaoFiscal: false,
@@ -139,7 +132,7 @@ export default function FormLicitacao() {
   }, [])
 
   return (
-    <div className="bg-white p-6 rounded shadow max-w-3xl">
+    <div className="bg-white p-6 rounded shadow max-w-3xl mx-auto">
       <h3 className="text-xl font-semibold mb-4">Nova Licitação</h3>
       <form onSubmit={save} className="space-y-4">
         <div className="grid grid-cols-3 gap-4">
@@ -334,29 +327,6 @@ export default function FormLicitacao() {
           <button className="btn btn-primary" type="submit">Salvar</button>
           <button type="button" onClick={() => setShowAttachmentsModal(true)} className="btn btn-ghost">Anexos</button>
           <button type="button" onClick={() => setShowItemsImportModal(true)} className="btn btn-ghost">Importar Itens</button>
-          <button type="button" onClick={() => window.print()} className="btn btn-ghost">Gerar Checklist (Imprimir)</button>
-          <button type="button" onClick={async () => {
-            // prepare and validate warnings
-            const required = [
-              ['Número do Pregão', modelo['numeroPregao']],
-              ['Número do Processo', modelo['numeroProcesso']],
-              ['Contratante', modelo['contratado']],
-              ['Portal', modelo['portal']],
-              ['Data da licitação', modelo['dataLicitacao']],
-              ['Tipo Objeto', modelo['tipoObjeto']],
-              ['Tipo de disputa', modelo['tipoDisputa']],
-              ['Definição do Julgamento', modelo['definJulgamento']]
-            ]
-            const missing = required.filter(([, v]) => !v).map(([k]) => k as string)
-            setWarnings(missing)
-
-            if (!page1Ref.current || !page2Ref.current) return
-            await exportElementsToPdf([page1Ref.current, page2Ref.current], `checklist_${modelo.codigo}.pdf`, 'Checklist')
-          }} className="bg-indigo-600 text-white px-4 py-2 rounded">Exportar PDF</button>
-          <button type="button" onClick={async () => {
-            if (!page2Ref.current) return
-            await exportElementsToPdf([page2Ref.current], `itens_${modelo.codigo}.pdf`, 'Itens')
-          }} className="btn btn-primary">Exportar Itens (PDF)</button>
         </div>
       </form>
       <AttachmentsModal open={showAttachmentsModal} onClose={() => setShowAttachmentsModal(false)} codigo={modelo.codigo} />
@@ -369,26 +339,6 @@ export default function FormLicitacao() {
           setContratantes(cs)
         } catch (err) { /* ignore */ }
       }} onSelect={(c) => { setSelectedContratante(c); setModelo(m => ({ ...m, contratado: c.nome })) }} />
-      {warnings.length > 0 && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3 mt-4">
-          <strong>Atenção — campos vazios salvos como aviso:</strong>
-          <ul className="list-disc ml-6 mt-2">
-            {warnings.map(w => <li key={w}>{w}</li>)}
-          </ul>
-        </div>
-      )}
-
-      <div style={{ position: 'absolute', left: -9999 }} aria-hidden>
-        <PrintableChecklist modelo={modelo} codigo={modelo.codigo} user={user} habilitacao={habilitacao} page1Ref={page1Ref} page2Ref={page2Ref} />
-        {/* items-only printable for separate export */}
-        <div style={{ display: 'none' }}>
-          {/* PrintableItems is rendered here so its DOM can be captured */}
-          <div id="print-items-wrapper">
-            {/* The PrintableItems component reads from localStorage directly */}
-            <div id="print-items-placeholder"></div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

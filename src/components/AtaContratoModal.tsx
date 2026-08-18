@@ -15,7 +15,7 @@ export type Ata = {
   criadoPor?: string
 }
 
-const TIPOS = ['Ata de Registro de Preços', 'Aditivo de Prazo', 'Aditivo de Preços', 'Outros']
+const TIPOS = ['Ata de Registro de Preços', 'Contrato', 'Aditivo de Prazo', 'Aditivo de Preços', 'Outros']
 
 export default function AtaContratoModal({ open, onClose, onSave, criadoPor }: {
   open: boolean

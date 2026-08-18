@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { dbGet } from '../utils/db'
 import { formatDateTimeBR } from '../utils/date'
-import { formatNumeric } from '../utils/format'
+import { formatNumeric, formatAnvisa } from '../utils/format'
 
 type Props = {
   modelo: any
@@ -28,22 +28,23 @@ const HABILITACAO_ITEMS: { key: string; label: string }[] = [
   { key: 'cti', label: 'CTI com Transportadora' },
 ]
 
-const ITEM_COLUMNS: { key: string; label: string; width: string; fallback?: string[]; numeric?: boolean }[] = [
+const ITEM_COLUMNS: { key: string; label: string; width: string; fallback?: string[]; numeric?: boolean; boolean?: boolean; anvisa?: boolean; maxChars?: number }[] = [
   { key: 'item', label: 'Item', width: '4%' },
-  { key: 'descricao', label: 'Descrição', width: '18%', fallback: ['description'] },
-  { key: 'unidade', label: 'Uni', width: '5%' },
+  { key: 'descricao', label: 'Descrição', width: '15%', fallback: ['description'], maxChars: 110 },
+  { key: 'unidade', label: 'Uni', width: '7%' },
   { key: 'quantidade', label: 'Qtd', width: '5%', fallback: ['qty'], numeric: true },
-  { key: 'valorEdital', label: 'Valor Edital', width: '8%', numeric: true },
-  { key: 'totalEdital', label: 'Total', width: '8%', numeric: true },
-  { key: 'marca', label: 'Marca', width: '9%' },
-  { key: 'apresentacao', label: 'Apresentação', width: '11%' },
-  { key: 'anvisa', label: 'Nº Anvisa', width: '8%' },
-  { key: 'valorCusto', label: 'Valor Custo', width: '8%', numeric: true },
-  { key: 'tx', label: 'TX', width: '4%', numeric: true },
-  { key: 'custoUnitario', label: 'Custo + TX (Uni)', width: '8%', numeric: true },
-  { key: 'totalCusto', label: 'Total Custo', width: '8%', numeric: true },
-  { key: 'status', label: 'Status', width: '7%' },
-  { key: 'custoCaixa', label: 'Custo Caixa', width: '8%', numeric: true },
+  { key: 'valorEdital', label: 'Valor Edital', width: '6%', numeric: true },
+  { key: 'totalEdital', label: 'Total', width: '6%', numeric: true },
+  { key: 'marca', label: 'Marca', width: '7%' },
+  { key: 'apresentacao', label: 'Apresentação', width: '6%' },
+  { key: 'anvisa', label: 'Nº Anvisa', width: '9%', anvisa: true },
+  { key: 'valorCusto', label: 'Valor Custo', width: '6%', numeric: true },
+  { key: 'tx', label: 'TX', width: '3%', numeric: true },
+  { key: 'custoUnitario', label: 'Custo + TX (Uni)', width: '6%', numeric: true },
+  { key: 'totalCusto', label: 'Total Custo', width: '6%', numeric: true },
+  { key: 'custoCaixa', label: 'Custo Caixa', width: '6%', numeric: true },
+  { key: 'vencedor', label: 'Vencedor', width: '6%', boolean: true },
+  { key: 'valorGanho', label: 'Valor Ganho', width: '5%' },
 ]
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -190,37 +191,62 @@ export default function PrintableChecklist({ modelo, codigo, user, habilitacao =
         {items.length === 0 ? (
           <div style={{ fontSize: 12 }}>Nenhum item importado.</div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, tableLayout: 'fixed' }}>
-            <colgroup>
-              {ITEM_COLUMNS.map(c => <col key={c.key} style={{ width: c.width }} />)}
-            </colgroup>
-            <thead>
-              <tr>
-                {ITEM_COLUMNS.map(c => (
-                  <th key={c.key} style={{ textAlign: 'left', background: PRIMARY, color: '#fff', padding: '5px 6px' }}>{c.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it, i) => (
-                <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f6f6fb' }}>
-                  {ITEM_COLUMNS.map(c => {
-                    let value = it[c.key]
-                    if ((value === undefined || value === '') && c.fallback) {
-                      for (const f of c.fallback) { if (it[f] !== undefined && it[f] !== '') { value = it[f]; break } }
-                    }
-                    const isText = c.key === 'descricao' || c.key === 'apresentacao'
-                    const display = c.numeric ? formatNumeric(value) : (value === undefined || value === null || value === '' ? '-' : String(value))
-                    return (
-                      <td key={c.key} style={{ padding: '4px 6px', borderBottom: '1px solid #eee', whiteSpace: isText ? 'normal' : 'nowrap', wordBreak: isText ? 'break-word' : 'normal' }}>
-                        {display}
-                      </td>
-                    )
-                  })}
+          <div style={{ border: `1px solid ${BOX_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5, tableLayout: 'fixed' }}>
+              <colgroup>
+                {ITEM_COLUMNS.map(c => <col key={c.key} style={{ width: c.width }} />)}
+              </colgroup>
+              <thead>
+                <tr>
+                  {ITEM_COLUMNS.map(c => (
+                    <th key={c.key} style={{ textAlign: c.numeric ? 'right' : 'left', background: PRIMARY, color: '#fff', padding: '7px 6px', fontSize: 9, letterSpacing: 0.2, wordBreak: 'break-word' }}>{c.label}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f7f7fc' }}>
+                    {ITEM_COLUMNS.map(c => {
+                      let value = it[c.key]
+                      if ((value === undefined || value === '') && c.fallback) {
+                        for (const f of c.fallback) { if (it[f] !== undefined && it[f] !== '') { value = it[f]; break } }
+                      }
+                      const isText = c.key === 'descricao' || c.key === 'apresentacao'
+                      let display: string
+                      if (c.boolean) {
+                        display = value ? 'Vencedor' : '-'
+                      } else if (c.anvisa) {
+                        display = formatAnvisa(value)
+                      } else if (c.numeric) {
+                        display = formatNumeric(value)
+                      } else {
+                        display = value === undefined || value === null || value === '' ? '-' : String(value)
+                        if (c.maxChars && display.length > c.maxChars) display = display.slice(0, c.maxChars).trimEnd() + '…'
+                      }
+                      return (
+                        <td
+                          key={c.key}
+                          style={{
+                            padding: '6px 6px',
+                            borderBottom: '1px solid #eee',
+                            verticalAlign: 'top',
+                            lineHeight: 1.35,
+                            textAlign: c.numeric ? 'right' : 'left',
+                            whiteSpace: isText ? 'normal' : 'nowrap',
+                            wordBreak: isText ? 'break-word' : 'normal',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {display}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </>

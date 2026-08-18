@@ -173,8 +173,7 @@ export default function ListLicitacoes() {
                     </span>
                   </td>
                   <td className="p-2">
-                      <Link to={`/licitacoes/${l.codigo}`} className="text-sm link-primary">Ver</Link>
-                      <Link to={`/licitacoes/novo?edit=${l.codigo}`} className="ml-3 text-sm link-secondary">Editar</Link>
+                      <Link to={`/licitacoes/${l.codigo}`} className="btn btn-primary text-xs px-3 py-1">Ver Licitação</Link>
                   </td>
                 </tr>
               ))}

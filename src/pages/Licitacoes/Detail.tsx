@@ -4,7 +4,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { dbGet } from '../../utils/db'
 import { exportElementsToPdf } from '../../utils/pdf'
 import { formatDateTimeBR, formatDateBR } from '../../utils/date'
-import { formatNumeric } from '../../utils/format'
+import { formatNumeric, calcCustoUnitario, calcTotalCusto } from '../../utils/format'
 import AttachmentsModal from '../../components/AttachmentsModal'
 import AtaContratoModal, { Ata } from '../../components/AtaContratoModal'
 import DeclaracoesSection from '../../components/DeclaracoesSection'
@@ -22,6 +22,17 @@ const HABILITACAO_ITEMS: { key: string; label: string }[] = [
   { key: 'cti', label: 'CTI com Transportadora' },
   { key: 'outras', label: 'Outras declarações' },
 ]
+
+// Abre o conteúdo (já todo em estilo inline, sem depender do CSS do app) numa
+// aba nova e aciona o diálogo de impressão nativo do navegador.
+function printElement(el: HTMLElement, title: string) {
+  const win = window.open('', '_blank', 'width=900,height=1000')
+  if (!win) return
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title></head><body style="margin:0">${el.outerHTML}</body></html>`)
+  win.document.close()
+  win.focus()
+  setTimeout(() => { win.print() }, 300)
+}
 
 const ITEM_FIELDS: { key: string; label: string; wide?: boolean }[] = [
   { key: 'item', label: 'Item' },
@@ -54,19 +65,20 @@ export default function DetailLicitacao() {
   useEffect(() => {
     let mounted = true
     const load = async () => {
-      const { dbGet } = await import('../../utils/db')
+      const { dbGet, migrateFromLocalStorage } = await import('../../utils/db')
+      // Garante que qualquer dado antigo ainda só em localStorage (de antes da
+      // migração para IndexedDB) seja copiado pro banco antes de ler — assim
+      // a leitura abaixo sempre reflete o banco, nunca depende de fallback.
+      await migrateFromLocalStorage()
       const list = (await dbGet('licitacoes')) || []
       const found = list.find((x: any) => String(x.codigo) === String(codigo))
       if (!mounted) return
       setModel(found || null)
       // load attachments, items and atas/contratos
       try {
-        const atKey = `attachments_${codigo}`
-        const itKey = `items_${codigo}`
-        const ataKey = `atas_${codigo}`
-        const rawAt = (await dbGet(atKey)) || (localStorage.getItem(atKey) ? JSON.parse(localStorage.getItem(atKey) || '[]') : [])
-        const rawIt = (await dbGet(itKey)) || (localStorage.getItem(itKey) ? JSON.parse(localStorage.getItem(itKey) || '[]') : [])
-        const rawAtas = (await dbGet(ataKey)) || []
+        const rawAt = (await dbGet(`attachments_${codigo}`)) || []
+        const rawIt = (await dbGet(`items_${codigo}`)) || []
+        const rawAtas = (await dbGet(`atas_${codigo}`)) || []
         if (mounted) {
           setAttachments(rawAt)
           setItems(rawIt)
@@ -107,6 +119,22 @@ export default function DetailLicitacao() {
   }
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [editItemDraft, setEditItemDraft] = useState<any>(null)
+  const [valorGanhoDraft, setValorGanhoDraft] = useState<Record<number, string>>({})
+
+  const saveValorGanho = async (idx: number, valor: string) => {
+    const key = `items_${model.codigo}`
+    const { dbGet, dbSet } = await import('../../utils/db')
+    const list = (await dbGet(key)) || []
+    list[idx] = { ...(list[idx] || {}), valorGanho: valor }
+    await dbSet(key, list)
+    setItems(list)
+    setValorGanhoDraft(d => { const next = { ...d }; delete next[idx]; return next })
+    try {
+      const { auditLog } = await import('../../utils/audit')
+      const user = localStorage.getItem('user_name') || undefined
+      await auditLog('item_valor_ganho', { codigo: model.codigo, itemIndex: idx, valorGanho: valor, descricao: list[idx].descricao }, user)
+    } catch (err) { /* ignore */ }
+  }
 
   const startEditItem = (idx: number) => {
     setEditingItemIndex(idx)
@@ -135,7 +163,7 @@ export default function DetailLicitacao() {
   }
 
   if (!model) return (
-    <div className="bg-white p-6 rounded shadow max-w-3xl">
+    <div className="bg-white p-6 rounded shadow max-w-3xl mx-auto">
       <p className="text-sm text-gray-600">Licitação não encontrada.</p>
       <div className="mt-4">
         <button onClick={() => nav('/licitacoes')} className="btn btn-ghost">Voltar</button>
@@ -327,10 +355,9 @@ export default function DetailLicitacao() {
                   <th className="p-2">TX</th>
                   <th className="p-2">Custo + TX (Uni)</th>
                   <th className="p-2">Total Custo</th>
-                  <th className="p-2">Status</th>
                   <th className="p-2">Custo Caixa</th>
                   <th className="p-2">Vencedor</th>
-                  <th className="p-2">Anexos</th>
+                  <th className="p-2">Valor Ganho</th>
                 </tr>
               </thead>
               <tbody>
@@ -361,33 +388,78 @@ export default function DetailLicitacao() {
                         <td className="p-2">{formatNumeric(it.tx)}</td>
                         <td className="p-2">{formatNumeric(it.custoUnitario)}</td>
                         <td className="p-2">{formatNumeric(it.totalCusto)}</td>
-                        <td className="p-2">{it.status || '-'}</td>
                         <td className="p-2">{formatNumeric(it.custoCaixa)}</td>
                         <td className="p-2" onClick={e => e.stopPropagation()}>
-                          {it.vencedor ? <span className="text-sm font-medium text-green-600">Vencedor</span> : <span className="text-sm text-gray-600">—</span>}
-                          <div className="mt-1">
-                            <button onClick={async () => {
-                              const key = `items_${model.codigo}`
-                              const { dbGet, dbSet } = await import('../../utils/db')
-                              const list = (await dbGet(key)) || []
-                              list[idx] = { ...(list[idx] || {}), vencedor: !list[idx]?.vencedor }
-                              await dbSet(key, list)
-                              setItems(list)
-                              try {
-                                const { auditLog } = await import('../../utils/audit')
-                                const user = localStorage.getItem('user_name') || undefined
-                                await auditLog('item_mark_winner', { codigo: model.codigo, itemIndex: idx, vencedor: list[idx].vencedor, descricao: list[idx].descricao }, user)
-                              } catch (err) { /* ignore */ }
-                            }} className="btn btn-ghost text-xs mt-1">Venceu</button>
-                          </div>
+                          {it.vencedor ? (
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-white px-2 py-1 rounded-full" style={{ backgroundColor: '#15803d' }}>✓ Vencedor</span>
+                              <button
+                                onClick={async () => {
+                                  const key = `items_${model.codigo}`
+                                  const { dbGet, dbSet } = await import('../../utils/db')
+                                  const list = (await dbGet(key)) || []
+                                  list[idx] = { ...(list[idx] || {}), vencedor: false }
+                                  await dbSet(key, list)
+                                  setItems(list)
+                                  try {
+                                    const { auditLog } = await import('../../utils/audit')
+                                    const user = localStorage.getItem('user_name') || undefined
+                                    await auditLog('item_mark_winner', { codigo: model.codigo, itemIndex: idx, vencedor: false, descricao: list[idx].descricao }, user)
+                                  } catch (err) { /* ignore */ }
+                                }}
+                                className="text-xs text-gray-400 hover:text-gray-600 underline"
+                              >
+                                desmarcar
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                const key = `items_${model.codigo}`
+                                const { dbGet, dbSet } = await import('../../utils/db')
+                                const list = (await dbGet(key)) || []
+                                list[idx] = { ...(list[idx] || {}), vencedor: true }
+                                await dbSet(key, list)
+                                setItems(list)
+                                try {
+                                  const { auditLog } = await import('../../utils/audit')
+                                  const user = localStorage.getItem('user_name') || undefined
+                                  await auditLog('item_mark_winner', { codigo: model.codigo, itemIndex: idx, vencedor: true, descricao: list[idx].descricao }, user)
+                                } catch (err) { /* ignore */ }
+                              }}
+                              className="btn btn-ghost text-xs px-3 py-1.5 font-medium"
+                            >
+                              Venceu
+                            </button>
+                          )}
                         </td>
-                        <td className="p-2">
-                          {attachments.filter(a => a.linkedItemIndex !== undefined && a.linkedItemIndex === idx).length} anexos
+                        <td className="p-2" onClick={e => e.stopPropagation()}>
+                          {it.vencedor ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                value={valorGanhoDraft[idx] ?? it.valorGanho ?? ''}
+                                onChange={e => setValorGanhoDraft(d => ({ ...d, [idx]: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') saveValorGanho(idx, (e.target as HTMLInputElement).value) }}
+                                className="w-24 p-1 rounded text-sm"
+                              />
+                              <button
+                                onClick={() => saveValorGanho(idx, valorGanhoDraft[idx] ?? it.valorGanho ?? '')}
+                                className="btn btn-primary text-xs px-2 py-1"
+                              >
+                                OK
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
                         </td>
                       </tr>
                       {isEditing && (
                         <tr className="bg-indigo-50/40 border-t">
-                          <td colSpan={17} className="p-4" onClick={e => e.stopPropagation()}>
+                          <td colSpan={16} className="p-4" onClick={e => e.stopPropagation()}>
                             <div className="grid grid-cols-4 gap-3">
                               {ITEM_FIELDS.map(f => (
                                 <div key={f.key} className={f.wide ? 'col-span-2' : ''}>
@@ -402,7 +474,24 @@ export default function DetailLicitacao() {
                                   ) : (
                                     <input
                                       value={editItemDraft?.[f.key] ?? ''}
-                                      onChange={e => setEditItemDraft((d: any) => ({ ...d, [f.key]: e.target.value }))}
+                                      onChange={e => {
+                                        const val = e.target.value
+                                        setEditItemDraft((d: any) => {
+                                          const next = { ...d, [f.key]: val }
+                                          // Custo + TX (Uni) e Total Custo são recalculados em cascata ao
+                                          // mudar Valor Custo/TX/Qtd, mas continuam campos normais — dá pra
+                                          // sobrescrever manualmente depois.
+                                          if (f.key === 'valorCusto' || f.key === 'tx') {
+                                            const calculado = calcCustoUnitario(next.valorCusto, next.tx)
+                                            if (calculado !== '') next.custoUnitario = calculado
+                                          }
+                                          if (f.key === 'valorCusto' || f.key === 'tx' || f.key === 'quantidade' || f.key === 'custoUnitario') {
+                                            const calculadoTotal = calcTotalCusto(next.custoUnitario, next.quantidade)
+                                            if (calculadoTotal !== '') next.totalCusto = calculadoTotal
+                                          }
+                                          return next
+                                        })
+                                      }}
                                       className="w-full p-1.5 rounded text-sm"
                                     />
                                   )}
@@ -447,10 +536,10 @@ export default function DetailLicitacao() {
       </div>
 
       <div className="mt-6 flex gap-2">
-        <button onClick={async () => {
+        <button onClick={() => {
           if (!printRef.current) return
-          await exportElementsToPdf([printRef.current], `checklist_${model.codigo}.pdf`, 'Checklist')
-        }} className="btn btn-primary">Exportar Checklist (PDF)</button>
+          printElement(printRef.current, `Checklist — Licitação ${model.codigo}`)
+        }} className="btn btn-primary">Imprimir Checklist</button>
         <button onClick={async () => {
           if (!itemsRef.current) return
           await exportElementsToPdf([itemsRef.current], `itens_${model.codigo}.pdf`, 'Itens')

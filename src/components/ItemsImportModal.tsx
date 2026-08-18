@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import * as XLSX from 'xlsx'
+import { calcCustoUnitario, calcTotalCusto } from '../utils/format'
 
 // A planilha de cotação sempre vem no mesmo layout de colunas (A a O), mas o
 // texto do cabeçalho pode se repetir (ex: duas colunas "TOTAL") e o número de
@@ -16,6 +17,13 @@ const COLUMNS = [
 function rowToItem(row: any[]): Record<string, any> {
   const item: Record<string, any> = {}
   COLUMNS.forEach((key, idx) => { item[key] = row[idx] ?? '' })
+  // Exceção combinada com o cliente: "custoUnitario" (Custo + TX (Uni)) e
+  // "totalCusto" são recalculados pelo sistema em vez de só transferidos da
+  // planilha — o resto dos campos continua sendo puro transporte de dados.
+  const calculadoCusto = calcCustoUnitario(item.valorCusto, item.tx)
+  if (calculadoCusto !== '') item.custoUnitario = calculadoCusto
+  const calculadoTotal = calcTotalCusto(item.custoUnitario, item.quantidade)
+  if (calculadoTotal !== '') item.totalCusto = calculadoTotal
   return item
 }
 
