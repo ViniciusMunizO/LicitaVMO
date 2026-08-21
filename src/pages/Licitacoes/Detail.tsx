@@ -569,7 +569,7 @@ export default function DetailLicitacao() {
 
       {/* hidden printable DOM */}
       <div style={{ position: 'absolute', left: -9999 }} aria-hidden>
-        <PrintableChecklist modelo={model} codigo={model.codigo} user={user} habilitacao={model.habilitacao} page1Ref={printRef} page2Ref={itemsRef} />
+        <PrintableChecklist modelo={model} codigo={model.codigo} user={user} habilitacao={model.habilitacao} page1Ref={printRef} page2Ref={itemsRef} items={items} attachments={attachments} />
       </div>
 
       <AttachmentsModal open={openAttachments} onClose={async () => {

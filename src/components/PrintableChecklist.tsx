@@ -10,6 +10,12 @@ type Props = {
   habilitacao?: any
   page1Ref?: React.RefObject<HTMLDivElement>
   page2Ref?: React.RefObject<HTMLDivElement>
+  // Quando o componente pai já mantém itens/anexos em estado (ex: a tela de
+  // Detalhe, que os atualiza a cada edição), eles são recebidos aqui prontos
+  // em vez de serem buscados de novo — assim o PDF/impressão nunca fica
+  // desatualizado em relação ao que está na tela, sem precisar dar F5.
+  items?: any[]
+  attachments?: any[]
 }
 
 const PRIMARY = '#2C2D7D'
@@ -80,7 +86,14 @@ function agruparPorLote(items: any[]): { lote: string | null; items: any[] }[] {
   return Array.from(grupos.entries()).map(([lote, items]) => ({ lote, items }))
 }
 
-function ItemsTable({ items }: { items: any[] }) {
+const TOTAL_EDITAL_INDEX = ITEM_COLUMNS.findIndex(c => c.key === 'totalEdital')
+const TOTAL_CUSTO_INDEX = ITEM_COLUMNS.findIndex(c => c.key === 'totalCusto')
+
+function somaColuna(items: any[], key: string): number {
+  return items.reduce((soma, it) => soma + (Number(it[key]) || 0), 0)
+}
+
+function ItemsTable({ items, subtotalLabel, subtotalStyle }: { items: any[]; subtotalLabel?: string; subtotalStyle?: React.CSSProperties }) {
   return (
     <div style={{ border: `1px solid ${BOX_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5, tableLayout: 'fixed' }}>
@@ -136,25 +149,40 @@ function ItemsTable({ items }: { items: any[] }) {
             </tr>
           ))}
         </tbody>
+        {subtotalLabel && (
+          <tfoot>
+            <tr style={{ background: BOX_BG }}>
+              <td colSpan={TOTAL_EDITAL_INDEX} style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700, ...subtotalStyle }}>{subtotalLabel}</td>
+              <td style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700, ...subtotalStyle }}>{formatNumeric(somaColuna(items, 'totalEdital'))}</td>
+              <td colSpan={TOTAL_CUSTO_INDEX - TOTAL_EDITAL_INDEX - 1} style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700, ...subtotalStyle }}>Total Custo do Lote:</td>
+              <td style={{ padding: '7px 6px', textAlign: 'right', fontWeight: 700, ...subtotalStyle }}>{formatNumeric(somaColuna(items, 'totalCusto'))}</td>
+              <td colSpan={ITEM_COLUMNS.length - TOTAL_CUSTO_INDEX - 1} style={subtotalStyle} />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   )
 }
 
-export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref }: Props) {
-  const [attachments, setAttachments] = useState<any[]>([])
-  const [items, setItems] = useState<any[]>([])
+export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref, items: itemsProp, attachments: attachmentsProp }: Props) {
+  const [fetchedAttachments, setFetchedAttachments] = useState<any[]>([])
+  const [fetchedItems, setFetchedItems] = useState<any[]>([])
   const [empresa, setEmpresa] = useState<any>(null)
+  const attachments = attachmentsProp ?? fetchedAttachments
+  const items = itemsProp ?? fetchedItems
 
   useEffect(() => {
     let mounted = true
-    Promise.all([dbGet(`attachments_${codigo}`), dbGet(`items_${codigo}`), dbGet('empresa_info')]).then(([at, it, emp]) => {
-      if (!mounted) return
-      setAttachments(at || [])
-      setItems(it || [])
-      setEmpresa(emp || null)
-    })
+    dbGet('empresa_info').then(emp => { if (mounted) setEmpresa(emp || null) })
+    if (itemsProp === undefined) {
+      dbGet(`items_${codigo}`).then(it => { if (mounted) setFetchedItems(it || []) })
+    }
+    if (attachmentsProp === undefined) {
+      dbGet(`attachments_${codigo}`).then(at => { if (mounted) setFetchedAttachments(at || []) })
+    }
     return () => { mounted = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codigo])
 
   return (
@@ -269,14 +297,31 @@ export default function PrintableChecklist({ modelo, codigo, user, habilitacao =
         ) : (
           (() => {
             const grupos = agruparPorLote(items)
-            return grupos.map((grupo, gi) => (
-              <div key={grupo.lote ?? '_'} style={{ marginBottom: gi < grupos.length - 1 ? 16 : 0 }}>
-                {grupo.lote !== null && (
-                  <h3 style={{ fontSize: 12, margin: '0 0 6px 0', color: PRIMARY, fontWeight: 700 }}>Lote {grupo.lote}</h3>
+            const temLotes = grupos.length > 1 || grupos[0]?.lote !== null
+            return (
+              <>
+                {grupos.map((grupo, gi) => (
+                  <div key={grupo.lote ?? '_'} style={{ marginBottom: gi < grupos.length - 1 ? 16 : 0 }}>
+                    {grupo.lote !== null && (
+                      <h3 style={{ fontSize: 12, margin: '0 0 6px 0', color: PRIMARY, fontWeight: 700 }}>Lote {grupo.lote}</h3>
+                    )}
+                    <ItemsTable items={grupo.items} subtotalLabel={temLotes ? 'Total do Lote:' : undefined} />
+                  </div>
+                ))}
+                {grupos.length > 1 && (
+                  <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <div style={{ background: PRIMARY, color: '#fff', borderRadius: 6, padding: '8px 16px', fontSize: 11, fontWeight: 700, display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                      <span>Valor Global da Licitação:</span>
+                      <span style={{ fontSize: 13 }}>{formatNumeric(somaColuna(items, 'totalEdital'))}</span>
+                    </div>
+                    <div style={{ background: BOX_BG, border: `1px solid ${BOX_BORDER}`, borderRadius: 6, padding: '8px 16px', fontSize: 11, fontWeight: 700, display: 'flex', gap: 12, alignItems: 'baseline' }}>
+                      <span>Custo Global:</span>
+                      <span style={{ fontSize: 13 }}>{formatNumeric(somaColuna(items, 'totalCusto'))}</span>
+                    </div>
+                  </div>
                 )}
-                <ItemsTable items={grupo.items} />
-              </div>
-            ))
+              </>
+            )
           })()
         )}
       </div>
