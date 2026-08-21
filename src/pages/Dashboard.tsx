@@ -154,8 +154,8 @@ export default function Dashboard() {
                 <div className="text-sm text-gray-500">Nenhuma licitação futura agendada</div>
               ) : (
                 <ul className="space-y-2">
-                  {proximas.map(l => (
-                    <li key={l.codigo} className="flex justify-between items-center text-sm border-t pt-2 first:border-t-0 first:pt-0">
+                  {proximas.map((l, i) => (
+                    <li key={`${l.codigo}-${i}`} className="flex justify-between items-center text-sm border-t pt-2 first:border-t-0 first:pt-0">
                       <div>
                         <Link to={`/licitacoes/${l.codigo}`} className="link-primary font-medium">{contratanteNome(l)}</Link>
                         <div className="text-gray-500">Código {l.codigo} • {l.tipoObjeto || 'Sem tipo'}</div>
@@ -170,8 +170,8 @@ export default function Dashboard() {
             <div className="bg-white p-4 rounded shadow">
               <h4 className="font-semibold mb-3">Últimas adicionadas</h4>
               <ul className="space-y-2">
-                {recentes.map(l => (
-                  <li key={l.codigo} className="flex justify-between items-center text-sm border-t pt-2 first:border-t-0 first:pt-0">
+                {recentes.map((l, i) => (
+                  <li key={`${l.codigo}-${i}`} className="flex justify-between items-center text-sm border-t pt-2 first:border-t-0 first:pt-0">
                     <div>
                       <Link to={`/licitacoes/${l.codigo}`} className="link-primary font-medium">{contratanteNome(l)}</Link>
                       <div className="text-gray-500">Código {l.codigo} • Ano {l.ano}</div>

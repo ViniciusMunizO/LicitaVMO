@@ -33,11 +33,18 @@ type Licitacao = {
   [key: string]: any
 }
 
-function nextCodigo() {
-  const raw = localStorage.getItem('licitacao_next')
-  const n = raw ? Number(raw) : 1
-  localStorage.setItem('licitacao_next', String(n + 1))
-  return n
+// Deriva o próximo código a partir do maior código já existente na lista de
+// licitações, em vez de um contador solto em localStorage — um contador
+// desacoplado dos dados reais pode ficar dessincronizado (ex: dados
+// removidos/editados manualmente) e gerar um código já usado por outra
+// licitação, o que corrompe dados (itens/anexos/atas são guardados em
+// chaves como `items_${codigo}`, então uma colisão faz duas licitações
+// dividirem os mesmos itens/anexos).
+async function nextCodigo(): Promise<number> {
+  const { dbGet } = await import('../../utils/db')
+  const list = (await dbGet('licitacoes')) || []
+  const max = list.reduce((m: number, l: any) => Math.max(m, Number(l.codigo) || 0), 0)
+  return max + 1
 }
 
 export default function FormLicitacao() {
@@ -91,7 +98,9 @@ export default function FormLicitacao() {
         }
       }
       const { date, time } = nowInBrasilia()
-      setModelo(m => ({ ...m, codigo: nextCodigo(), dataCredenciamento: date, horaCredenciamento: time }))
+      const codigo = await nextCodigo()
+      if (!mounted) return
+      setModelo(m => ({ ...m, codigo, dataCredenciamento: date, horaCredenciamento: time }))
     }
     init()
     return () => { mounted = false }

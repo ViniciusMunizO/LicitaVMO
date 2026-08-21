@@ -8,15 +8,23 @@ import { calcCustoUnitario, calcTotalCusto } from '../utils/format'
 // (por índice de coluna), ignorando o texto do cabeçalho, e para no primeiro
 // item sem descrição — o restante da planilha costuma vir com linhas em
 // branco do modelo.
+//
+// Às vezes a planilha vem com uma coluna extra "LOTE" na frente (cada item
+// pertence a um lote diferente). Como isso é opcional e desloca todas as
+// outras colunas em uma posição, a única forma segura de saber se ela está
+// presente é olhar o texto da primeira célula do cabeçalho — é a exceção que
+// confirma a regra da leitura posicional, usada só pra decidir o layout.
 const COLUMNS = [
   'item', 'descricao', 'unidade', 'quantidade', 'valorEdital', 'totalEdital',
   'marca', 'apresentacao', 'anvisa', 'valorCusto', 'tx', 'custoUnitario', 'totalCusto',
   'status', 'custoCaixa',
 ] as const
 
-function rowToItem(row: any[]): Record<string, any> {
+const COLUMNS_COM_LOTE = ['lote', ...COLUMNS] as const
+
+function rowToItem(row: any[], columns: readonly string[]): Record<string, any> {
   const item: Record<string, any> = {}
-  COLUMNS.forEach((key, idx) => { item[key] = row[idx] ?? '' })
+  columns.forEach((key, idx) => { item[key] = row[idx] ?? '' })
   // Exceção combinada com o cliente: "custoUnitario" (Custo + TX (Uni)) e
   // "totalCusto" são recalculados pelo sistema em vez de só transferidos da
   // planilha — o resto dos campos continua sendo puro transporte de dados.
@@ -51,9 +59,12 @@ export default function ItemsImportModal({ open, onClose, codigo }: { open: bool
       const sheetName = workbook.SheetNames[0]
       const sheet = workbook.Sheets[sheetName]
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+      const headerRow = rows[0] || []
+      const temLote = String(headerRow[0] || '').trim().toUpperCase() === 'LOTE'
+      const columns = temLote ? COLUMNS_COM_LOTE : COLUMNS
       const dataRows = rows.slice(1) // linha 1 é o cabeçalho
       const parsed = dataRows
-        .map(rowToItem)
+        .map(row => rowToItem(row, columns))
         .filter(it => String(it.descricao || '').trim() !== '')
       setItems(parsed)
       import('../utils/db').then(async db => await db.dbSet(key, parsed))
@@ -82,7 +93,7 @@ export default function ItemsImportModal({ open, onClose, codigo }: { open: bool
           {items.length === 0 && <p className="text-sm text-gray-500">Nenhum item importado.</p>}
           {items.slice(0, 50).map((it, i) => (
             <div key={i} className="text-sm border-b py-2">
-              <div className="font-medium">Item {it.item || i + 1} — {it.descricao || '-'}</div>
+              <div className="font-medium">{it.lote ? `Lote ${it.lote} — ` : ''}Item {it.item || i + 1} — {it.descricao || '-'}</div>
               <div className="text-xs text-gray-700 mt-1">Uni: {it.unidade || '-'} — Qtd: {it.quantidade || '-'} — Marca: {it.marca || '-'}</div>
             </div>
           ))}

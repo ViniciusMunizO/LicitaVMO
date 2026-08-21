@@ -65,6 +65,82 @@ function Box({ title, children }: { title: string; children: React.ReactNode }) 
   )
 }
 
+// Agrupa os itens por lote preservando a ordem de primeira aparição de cada
+// lote na planilha — evita depender de ordenação numérica/alfabética quando
+// o rótulo do lote não é necessariamente um número puro.
+function agruparPorLote(items: any[]): { lote: string | null; items: any[] }[] {
+  const temLote = items.some(it => it.lote)
+  if (!temLote) return [{ lote: null, items }]
+  const grupos = new Map<string, any[]>()
+  for (const it of items) {
+    const chave = String(it.lote || 'Sem lote')
+    if (!grupos.has(chave)) grupos.set(chave, [])
+    grupos.get(chave)!.push(it)
+  }
+  return Array.from(grupos.entries()).map(([lote, items]) => ({ lote, items }))
+}
+
+function ItemsTable({ items }: { items: any[] }) {
+  return (
+    <div style={{ border: `1px solid ${BOX_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5, tableLayout: 'fixed' }}>
+        <colgroup>
+          {ITEM_COLUMNS.map(c => <col key={c.key} style={{ width: c.width }} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            {ITEM_COLUMNS.map(c => (
+              <th key={c.key} style={{ textAlign: c.numeric ? 'right' : 'left', background: PRIMARY, color: '#fff', padding: '7px 6px', fontSize: 9, letterSpacing: 0.2, wordBreak: 'break-word' }}>{c.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it, i) => (
+            <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f7f7fc' }}>
+              {ITEM_COLUMNS.map(c => {
+                let value = it[c.key]
+                if ((value === undefined || value === '') && c.fallback) {
+                  for (const f of c.fallback) { if (it[f] !== undefined && it[f] !== '') { value = it[f]; break } }
+                }
+                const isText = c.key === 'descricao' || c.key === 'apresentacao'
+                let display: string
+                if (c.boolean) {
+                  display = value ? 'Vencedor' : '-'
+                } else if (c.anvisa) {
+                  display = formatAnvisa(value)
+                } else if (c.numeric) {
+                  display = formatNumeric(value)
+                } else {
+                  display = value === undefined || value === null || value === '' ? '-' : String(value)
+                  if (c.maxChars && display.length > c.maxChars) display = display.slice(0, c.maxChars).trimEnd() + '…'
+                }
+                return (
+                  <td
+                    key={c.key}
+                    style={{
+                      padding: '6px 6px',
+                      borderBottom: '1px solid #eee',
+                      verticalAlign: 'top',
+                      lineHeight: 1.35,
+                      textAlign: c.numeric ? 'right' : 'left',
+                      whiteSpace: isText ? 'normal' : 'nowrap',
+                      wordBreak: isText ? 'break-word' : 'normal',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {display}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export default function PrintableChecklist({ modelo, codigo, user, habilitacao = {}, page1Ref, page2Ref }: Props) {
   const [attachments, setAttachments] = useState<any[]>([])
   const [items, setItems] = useState<any[]>([])
@@ -191,62 +267,17 @@ export default function PrintableChecklist({ modelo, codigo, user, habilitacao =
         {items.length === 0 ? (
           <div style={{ fontSize: 12 }}>Nenhum item importado.</div>
         ) : (
-          <div style={{ border: `1px solid ${BOX_BORDER}`, borderRadius: 6, overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5, tableLayout: 'fixed' }}>
-              <colgroup>
-                {ITEM_COLUMNS.map(c => <col key={c.key} style={{ width: c.width }} />)}
-              </colgroup>
-              <thead>
-                <tr>
-                  {ITEM_COLUMNS.map(c => (
-                    <th key={c.key} style={{ textAlign: c.numeric ? 'right' : 'left', background: PRIMARY, color: '#fff', padding: '7px 6px', fontSize: 9, letterSpacing: 0.2, wordBreak: 'break-word' }}>{c.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, i) => (
-                  <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f7f7fc' }}>
-                    {ITEM_COLUMNS.map(c => {
-                      let value = it[c.key]
-                      if ((value === undefined || value === '') && c.fallback) {
-                        for (const f of c.fallback) { if (it[f] !== undefined && it[f] !== '') { value = it[f]; break } }
-                      }
-                      const isText = c.key === 'descricao' || c.key === 'apresentacao'
-                      let display: string
-                      if (c.boolean) {
-                        display = value ? 'Vencedor' : '-'
-                      } else if (c.anvisa) {
-                        display = formatAnvisa(value)
-                      } else if (c.numeric) {
-                        display = formatNumeric(value)
-                      } else {
-                        display = value === undefined || value === null || value === '' ? '-' : String(value)
-                        if (c.maxChars && display.length > c.maxChars) display = display.slice(0, c.maxChars).trimEnd() + '…'
-                      }
-                      return (
-                        <td
-                          key={c.key}
-                          style={{
-                            padding: '6px 6px',
-                            borderBottom: '1px solid #eee',
-                            verticalAlign: 'top',
-                            lineHeight: 1.35,
-                            textAlign: c.numeric ? 'right' : 'left',
-                            whiteSpace: isText ? 'normal' : 'nowrap',
-                            wordBreak: isText ? 'break-word' : 'normal',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {display}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          (() => {
+            const grupos = agruparPorLote(items)
+            return grupos.map((grupo, gi) => (
+              <div key={grupo.lote ?? '_'} style={{ marginBottom: gi < grupos.length - 1 ? 16 : 0 }}>
+                {grupo.lote !== null && (
+                  <h3 style={{ fontSize: 12, margin: '0 0 6px 0', color: PRIMARY, fontWeight: 700 }}>Lote {grupo.lote}</h3>
+                )}
+                <ItemsTable items={grupo.items} />
+              </div>
+            ))
+          })()
         )}
       </div>
     </>

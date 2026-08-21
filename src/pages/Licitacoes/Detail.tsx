@@ -35,6 +35,7 @@ function printElement(el: HTMLElement, title: string) {
 }
 
 const ITEM_FIELDS: { key: string; label: string; wide?: boolean }[] = [
+  { key: 'lote', label: 'Lote' },
   { key: 'item', label: 'Item' },
   { key: 'descricao', label: 'Descrição', wide: true },
   { key: 'unidade', label: 'Uni' },
@@ -120,6 +121,7 @@ export default function DetailLicitacao() {
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
   const [editItemDraft, setEditItemDraft] = useState<any>(null)
   const [valorGanhoDraft, setValorGanhoDraft] = useState<Record<number, string>>({})
+  const [editingValorGanhoIdx, setEditingValorGanhoIdx] = useState<number | null>(null)
 
   const saveValorGanho = async (idx: number, valor: string) => {
     const key = `items_${model.codigo}`
@@ -129,6 +131,9 @@ export default function DetailLicitacao() {
     await dbSet(key, list)
     setItems(list)
     setValorGanhoDraft(d => { const next = { ...d }; delete next[idx]; return next })
+    // sai do modo de edição — o valor salvo aparece como texto fixo, o que
+    // deixa claro pra quem usa que o "OK" realmente gravou algo.
+    setEditingValorGanhoIdx(current => (current === idx ? null : current))
     try {
       const { auditLog } = await import('../../utils/audit')
       const user = localStorage.getItem('user_name') || undefined
@@ -161,6 +166,8 @@ export default function DetailLicitacao() {
       await auditLog('item_edit', { codigo: model.codigo, itemIndex: idx, descricao: list[idx].descricao }, auditUser)
     } catch (err) { /* ignore */ }
   }
+
+  const hasLotes = items.some(it => it.lote)
 
   if (!model) return (
     <div className="bg-white p-6 rounded shadow max-w-3xl mx-auto">
@@ -342,6 +349,7 @@ export default function DetailLicitacao() {
             <table className="w-full table-auto text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-500 whitespace-nowrap">
+                  {hasLotes && <th className="p-2">Lote</th>}
                   <th className="p-2">Item</th>
                   <th className="p-2">Descrição</th>
                   <th className="p-2">Uni</th>
@@ -370,6 +378,7 @@ export default function DetailLicitacao() {
                         onClick={() => { if (!isEditing) startEditItem(idx) }}
                         title="Clique para editar este item"
                       >
+                        {hasLotes && <td className="p-2">{it.lote || '-'}</td>}
                         <td className="p-2">{it.item ?? idx + 1}</td>
                         <td className="p-2 whitespace-normal">
                           {(() => {
@@ -421,6 +430,7 @@ export default function DetailLicitacao() {
                                 list[idx] = { ...(list[idx] || {}), vencedor: true }
                                 await dbSet(key, list)
                                 setItems(list)
+                                setEditingValorGanhoIdx(idx)
                                 try {
                                   const { auditLog } = await import('../../utils/audit')
                                   const user = localStorage.getItem('user_name') || undefined
@@ -434,12 +444,15 @@ export default function DetailLicitacao() {
                           )}
                         </td>
                         <td className="p-2" onClick={e => e.stopPropagation()}>
-                          {it.vencedor ? (
+                          {!it.vencedor ? (
+                            <span className="text-sm text-gray-400">—</span>
+                          ) : editingValorGanhoIdx === idx || !it.valorGanho ? (
                             <div className="flex items-center gap-1">
                               <input
                                 type="text"
                                 inputMode="decimal"
                                 placeholder="0,00"
+                                autoFocus={editingValorGanhoIdx === idx}
                                 value={valorGanhoDraft[idx] ?? it.valorGanho ?? ''}
                                 onChange={e => setValorGanhoDraft(d => ({ ...d, [idx]: e.target.value }))}
                                 onKeyDown={e => { if (e.key === 'Enter') saveValorGanho(idx, (e.target as HTMLInputElement).value) }}
@@ -453,13 +466,21 @@ export default function DetailLicitacao() {
                               </button>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400">—</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-800">{it.valorGanho}</span>
+                              <button
+                                onClick={() => setEditingValorGanhoIdx(idx)}
+                                className="text-xs text-gray-400 hover:text-gray-600 underline"
+                              >
+                                editar
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
                       {isEditing && (
                         <tr className="bg-indigo-50/40 border-t">
-                          <td colSpan={16} className="p-4" onClick={e => e.stopPropagation()}>
+                          <td colSpan={hasLotes ? 17 : 16} className="p-4" onClick={e => e.stopPropagation()}>
                             <div className="grid grid-cols-4 gap-3">
                               {ITEM_FIELDS.map(f => (
                                 <div key={f.key} className={f.wide ? 'col-span-2' : ''}>

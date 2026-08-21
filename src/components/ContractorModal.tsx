@@ -21,11 +21,12 @@ export default function ContractorModal({ open, onClose, onSelect }: { open: boo
     return () => { mounted = false }
   }, [open])
 
+  // Deriva do maior código já cadastrado, em vez de um contador solto em
+  // localStorage que pode dessincronizar dos dados reais e gerar colisão
+  // (mesmo problema já corrigido no código das licitações).
   function nextCodigo() {
-    const raw = localStorage.getItem('contratante_next')
-    const n = raw ? Number(raw) : 1
-    localStorage.setItem('contratante_next', String(n + 1))
-    return String(n).padStart(4, '0')
+    const max = list.reduce((m, c) => Math.max(m, Number(c.codigo) || 0), 0)
+    return String(max + 1).padStart(4, '0')
   }
 
   const save = (e: React.FormEvent) => {
