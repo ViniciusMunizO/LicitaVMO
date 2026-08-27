@@ -99,10 +99,8 @@ export default function DetailLicitacao() {
 
   const saveAta = async (ata: Ata) => {
     const key = `atas_${codigo}`
-    const { dbGet, dbSet } = await import('../../utils/db')
-    const list = (await dbGet(key)) || []
-    const updated = [...list, ata]
-    await dbSet(key, updated)
+    const { dbUpdate } = await import('../../utils/db')
+    const updated = await dbUpdate<Ata[]>(key, (current) => [...(current || []), ata])
     setAtas(updated)
     try {
       const { auditLog } = await import('../../utils/audit')
@@ -113,9 +111,8 @@ export default function DetailLicitacao() {
 
   const removeAta = async (id: string) => {
     const key = `atas_${codigo}`
-    const { dbGet, dbSet } = await import('../../utils/db')
-    const list = ((await dbGet(key)) || []).filter((a: Ata) => a.id !== id)
-    await dbSet(key, list)
+    const { dbUpdate } = await import('../../utils/db')
+    const list = await dbUpdate<Ata[]>(key, (current) => (current || []).filter((a: Ata) => a.id !== id))
     setAtas(list)
   }
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
@@ -125,10 +122,12 @@ export default function DetailLicitacao() {
 
   const saveValorGanho = async (idx: number, valor: string) => {
     const key = `items_${model.codigo}`
-    const { dbGet, dbSet } = await import('../../utils/db')
-    const list = (await dbGet(key)) || []
-    list[idx] = { ...(list[idx] || {}), valorGanho: valor }
-    await dbSet(key, list)
+    const { dbUpdate } = await import('../../utils/db')
+    const list = await dbUpdate<any[]>(key, (current) => {
+      const next = [...(current || [])]
+      next[idx] = { ...(next[idx] || {}), valorGanho: valor }
+      return next
+    })
     setItems(list)
     setValorGanhoDraft(d => { const next = { ...d }; delete next[idx]; return next })
     // sai do modo de edição — o valor salvo aparece como texto fixo, o que
@@ -153,10 +152,12 @@ export default function DetailLicitacao() {
 
   const saveEditItem = async (idx: number) => {
     const key = `items_${model.codigo}`
-    const { dbGet, dbSet } = await import('../../utils/db')
-    const list = (await dbGet(key)) || []
-    list[idx] = { ...(list[idx] || {}), ...editItemDraft }
-    await dbSet(key, list)
+    const { dbUpdate } = await import('../../utils/db')
+    const list = await dbUpdate<any[]>(key, (current) => {
+      const next = [...(current || [])]
+      next[idx] = { ...(next[idx] || {}), ...editItemDraft }
+      return next
+    })
     setItems(list)
     setEditingItemIndex(null)
     setEditItemDraft(null)
@@ -405,10 +406,12 @@ export default function DetailLicitacao() {
                               <button
                                 onClick={async () => {
                                   const key = `items_${model.codigo}`
-                                  const { dbGet, dbSet } = await import('../../utils/db')
-                                  const list = (await dbGet(key)) || []
-                                  list[idx] = { ...(list[idx] || {}), vencedor: false }
-                                  await dbSet(key, list)
+                                  const { dbUpdate } = await import('../../utils/db')
+                                  const list = await dbUpdate<any[]>(key, (current) => {
+                                    const next = [...(current || [])]
+                                    next[idx] = { ...(next[idx] || {}), vencedor: false }
+                                    return next
+                                  })
                                   setItems(list)
                                   try {
                                     const { auditLog } = await import('../../utils/audit')
@@ -425,10 +428,12 @@ export default function DetailLicitacao() {
                             <button
                               onClick={async () => {
                                 const key = `items_${model.codigo}`
-                                const { dbGet, dbSet } = await import('../../utils/db')
-                                const list = (await dbGet(key)) || []
-                                list[idx] = { ...(list[idx] || {}), vencedor: true }
-                                await dbSet(key, list)
+                                const { dbUpdate } = await import('../../utils/db')
+                                const list = await dbUpdate<any[]>(key, (current) => {
+                                  const next = [...(current || [])]
+                                  next[idx] = { ...(next[idx] || {}), vencedor: true }
+                                  return next
+                                })
                                 setItems(list)
                                 setEditingValorGanhoIdx(idx)
                                 try {

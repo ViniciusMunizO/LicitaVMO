@@ -21,20 +21,20 @@ export default function ContractorModal({ open, onClose, onSelect }: { open: boo
     return () => { mounted = false }
   }, [open])
 
-  // Deriva do maior código já cadastrado, em vez de um contador solto em
-  // localStorage que pode dessincronizar dos dados reais e gerar colisão
-  // (mesmo problema já corrigido no código das licitações).
-  function nextCodigo() {
-    const max = list.reduce((m, c) => Math.max(m, Number(c.codigo) || 0), 0)
-    return String(max + 1).padStart(4, '0')
-  }
-
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault()
-    const novo: Contratante = { codigo: nextCodigo(), nome: form.nome || '', uf: (form.uf || '').toUpperCase() }
-    const updated = [...list, novo]
+    const { dbUpdate } = await import('../utils/db')
+    // Código e gravação calculados dentro de uma única transação atômica —
+    // evita colisão de código e perda de cadastro quando duas pessoas
+    // registram um contratante ao mesmo tempo (mesmo problema já corrigido
+    // no código das licitações).
+    const updated = await dbUpdate<Contratante[]>('contratantes', (current) => {
+      const atual = current || []
+      const max = atual.reduce((m, c) => Math.max(m, Number(c.codigo) || 0), 0)
+      const novo: Contratante = { codigo: String(max + 1).padStart(4, '0'), nome: form.nome || '', uf: (form.uf || '').toUpperCase() }
+      return [...atual, novo]
+    })
     setList(updated)
-    import('../utils/db').then(async db => await db.dbSet('contratantes', updated))
     setForm({ nome: '', uf: '' })
   }
 

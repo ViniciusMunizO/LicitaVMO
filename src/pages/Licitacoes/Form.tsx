@@ -39,7 +39,10 @@ type Licitacao = {
 // removidos/editados manualmente) e gerar um código já usado por outra
 // licitação, o que corrompe dados (itens/anexos/atas são guardados em
 // chaves como `items_${codigo}`, então uma colisão faz duas licitações
-// dividirem os mesmos itens/anexos).
+// dividirem os mesmos itens/anexos). Usado só como prévia ao carregar a
+// página — o código que realmente vale é recalculado dentro da transação
+// atômica no momento de salvar (ver `save`), pra não colidir se outra aba
+// tiver salvo uma licitação nova nesse meio-tempo.
 async function nextCodigo(): Promise<number> {
   const { dbGet } = await import('../../utils/db')
   const list = (await dbGet('licitacoes')) || []
@@ -110,26 +113,29 @@ export default function FormLicitacao() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault()
-    const pushAndSave = async () => {
-      const { dbGet, dbSet } = await import('../../utils/db')
-      const list = (await dbGet('licitacoes')) || []
-      const record = { ...modelo, criadoPor: user?.name, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao }
+    const { dbUpdate } = await import('../../utils/db')
+    let savedCodigo = modelo.codigo
+    // Lê e grava a lista de licitações numa única transação atômica (ver
+    // dbUpdate em utils/db.ts) — evita que duas abas/usuários salvando ao
+    // mesmo tempo se sobrescrevam (last-write-wins) ou colidam no código.
+    await dbUpdate<any[]>('licitacoes', (current) => {
+      const list = current || []
+      const record: any = { ...modelo, criadoPor: user?.name, contratante: selectedContratante || { nome: modelo.contratado }, habilitacao }
       if (isEditing) {
         const idx = list.findIndex((x: any) => String(x.codigo) === String(modelo.codigo))
-        if (idx >= 0) list[idx] = record
-        else list.push(record)
-      } else {
-        list.push(record)
+        if (idx >= 0) { const next = [...list]; next[idx] = record; return next }
+        return [...list, record]
       }
-      await dbSet('licitacoes', list)
-      // audit
-      try {
-        const { auditLog } = await import('../../utils/audit')
-        const userName = localStorage.getItem('user_name') || undefined
-        await auditLog(isEditing ? 'licitacao_update' : 'licitacao_create', { codigo: modelo.codigo }, userName)
-      } catch (err) { /* ignore */ }
-    }
-    await pushAndSave()
+      const max = list.reduce((m: number, l: any) => Math.max(m, Number(l.codigo) || 0), 0)
+      savedCodigo = max + 1
+      record.codigo = savedCodigo
+      return [...list, record]
+    })
+    try {
+      const { auditLog } = await import('../../utils/audit')
+      const userName = localStorage.getItem('user_name') || undefined
+      await auditLog(isEditing ? 'licitacao_update' : 'licitacao_create', { codigo: savedCodigo }, userName)
+    } catch (err) { /* ignore */ }
     nav('/licitacoes')
   }
 

@@ -69,6 +69,38 @@ export async function dbGet(key: string) {
   }
 }
 
+// Lê e grava um valor numa ÚNICA transação IndexedDB, em vez de um dbGet
+// seguido de um dbSet separados. Isso importa porque duas abas/usuários
+// mexendo na MESMA chave ao mesmo tempo (ex: a lista de licitações) com
+// dbGet+dbSet correm risco clássico de "last write wins": as duas leem a
+// lista antes de qualquer uma escrever, e a segunda a gravar apaga o que a
+// primeira acabou de salvar. Transações "readwrite" no mesmo object store
+// são serializadas pelo IndexedDB — a segunda chamada só começa a ler depois
+// que a primeira transação (leitura+escrita) já terminou — então o updateFn
+// sempre enxerga o valor mais recente, sem essa janela de corrida.
+export async function dbUpdate<T = any>(key: string, updateFn: (current: T | undefined) => T): Promise<T> {
+  const db = await getDB()
+  return new Promise<T>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    const store = tx.objectStore(STORE)
+    const getReq = store.get(key)
+    getReq.onerror = () => reject(getReq.error)
+    getReq.onsuccess = () => {
+      let next: T
+      try {
+        next = updateFn(getReq.result)
+      } catch (err) {
+        tx.abort()
+        reject(err)
+        return
+      }
+      store.put(next, key)
+      tx.oncomplete = () => resolve(next)
+      tx.onerror = () => reject(tx.error)
+    }
+  })
+}
+
 export async function dbDelete(key: string) {
   try {
     await withStore('readwrite', store => { store.delete(key) })

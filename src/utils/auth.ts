@@ -1,4 +1,4 @@
-import { dbGet, dbSet, migrateFromLocalStorage } from './db'
+import { dbGet, dbSet, dbUpdate, migrateFromLocalStorage } from './db'
 
 export type StoredUser = {
   id: number
@@ -35,4 +35,29 @@ export async function ensureDefaultAdmin() {
 export async function findUserByCredentials(login: string, password: string): Promise<StoredUser | null> {
   const users = await getUsers()
   return users.find(u => u.login === login && u.password === password) || null
+}
+
+// Checa duplicidade de login e grava o novo usuário numa única transação
+// atômica (ver dbUpdate) — sem isso, duas pessoas criando um usuário com o
+// mesmo login ao mesmo tempo poderiam passar pela checagem antes de
+// qualquer uma salvar, e a segunda gravação apagaria a primeira.
+export async function addUser(input: { name: string; login: string; password: string; role: StoredUser['role'] }): Promise<
+  { ok: true; user: StoredUser; users: StoredUser[] } | { ok: false; reason: 'duplicate' }
+> {
+  const loginTrimmed = input.login.trim()
+  let duplicate = false
+  let created: StoredUser | null = null
+  const users = await dbUpdate<StoredUser[]>(USERS_KEY, (current) => {
+    const atual = current || []
+    if (atual.some(u => u.login.toLowerCase() === loginTrimmed.toLowerCase())) {
+      duplicate = true
+      return atual
+    }
+    const nextId = atual.reduce((max, u) => Math.max(max, u.id), 0) + 1
+    const novo: StoredUser = { id: nextId, name: input.name.trim(), login: loginTrimmed, password: input.password, role: input.role }
+    created = novo
+    return [...atual, novo]
+  })
+  if (duplicate || !created) return { ok: false, reason: 'duplicate' }
+  return { ok: true, user: created, users }
 }

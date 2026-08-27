@@ -27,28 +27,30 @@ export default function AttachmentsModal({ open, onClose, codigo }: { open: bool
   const onFile = (f: File | null) => {
     if (!f) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const data = String(reader.result)
       const att: Attachment = {
-        id: String(Date.now()),
+        id: String(Date.now()) + Math.random().toString(36).slice(2, 8),
         name: name || f.name,
         filename: f.name,
         data,
         date: new Date().toISOString(),
       }
-      const updated = [...list, att]
+      const db = await import('../utils/db')
+      // Anexa ao valor mais atual do banco (não ao estado local, que pode
+      // estar desatualizado se outra aba mexeu nos anexos nesse meio-tempo).
+      const updated = await db.dbUpdate<Attachment[]>(key, (current) => [...(current || []), att])
       setList(updated)
-      import('../utils/db').then(async db => await db.dbSet(key, updated))
       setName('')
       void recordUpload(att)
     }
     reader.readAsDataURL(f)
   }
 
-  const remove = (id: string) => {
-    const updated = list.filter(l => l.id !== id)
+  const remove = async (id: string) => {
+    const db = await import('../utils/db')
+    const updated = await db.dbUpdate<Attachment[]>(key, (current) => (current || []).filter(l => l.id !== id))
     setList(updated)
-    import('../utils/db').then(async db => await db.dbSet(key, updated))
     void recordRemove(id)
   }
 

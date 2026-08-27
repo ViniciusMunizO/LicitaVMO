@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getUsers, saveUsers, StoredUser } from '../utils/auth'
+import { getUsers, addUser, StoredUser } from '../utils/auth'
 
 const ROLE_LABELS: Record<StoredUser['role'], string> = {
   admin: 'Administrador',
@@ -24,16 +24,12 @@ export default function Users() {
   const add = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    const loginTrimmed = loginValue.trim()
-    if (users.some(u => u.login.toLowerCase() === loginTrimmed.toLowerCase())) {
+    const result = await addUser({ name, login: loginValue, password, role })
+    if (!result.ok) {
       setError('Já existe um usuário com esse login.')
       return
     }
-    const nextId = users.reduce((max, u) => Math.max(max, u.id), 0) + 1
-    const novo: StoredUser = { id: nextId, name: name.trim(), login: loginTrimmed, password, role }
-    const updated = [...users, novo]
-    await saveUsers(updated)
-    setUsers(updated)
+    setUsers(result.users)
     setName('')
     setLoginValue('')
     setPassword('')
